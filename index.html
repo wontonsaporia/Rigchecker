@@ -113,7 +113,7 @@
     <div class="sidebar-desc">アニメーションを選んでプレビュー</div>
     <div class="anim-grid" id="anim-grid">
       <div class="anim-btn" data-anim="Breathing Idle"><span class="anim-name">Idle</span><span class="anim-sub">待機ポーズ</span></div>
-      <div class="anim-btn" data-anim="Shopping Cart Dance"><span class="anim-name">Shopping Cart</span><span class="anim-sub">ショッピングカートダンス</span></div>
+      <div class="anim-btn" data-anim="Shoping Cart Dance"><span class="anim-name">Shopping Cart</span><span class="anim-sub">ショッピングカートダンス</span></div>
       <div class="anim-btn" data-anim="Northern Soul Spin Combo"><span class="anim-name">Spin Combo</span><span class="anim-sub">スピンコンボダンス</span></div>
       <div class="anim-btn" data-anim="Walking"><span class="anim-name">Walk</span><span class="anim-sub">歩行</span></div>
       <div class="anim-btn" data-anim="Standing Jump"><span class="anim-name">Jump</span><span class="anim-sub">ジャンプ</span></div>
@@ -239,7 +239,17 @@ function goToStep(step){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   $('sidebar-markers').classList.remove('visible'); $('sidebar-anim').classList.remove('visible'); hideGuide();
   if(step==='upload'){$('screen-upload').classList.add('active');controls.enabled=false;setStatus('step','アップロード待ち')}
-  if(step==='markers'){$('sidebar-markers').classList.add('visible');controls.enabled=true;resetMarkers();showGuide(MARKER_GUIDES[MARKER_ORDER[0]]);setStatus('step','マーカー配置')}
+  if(step==='markers'){
+    $('sidebar-markers').classList.add('visible');controls.enabled=true;resetMarkers();
+    // Camera: face model from front (positive Z)
+    const box=new THREE.Box3().setFromObject(state.model);
+    const size=box.getSize(new THREE.Vector3());
+    const center=box.getCenter(new THREE.Vector3());
+    const h=size.y;
+    camera.position.set(0, center.y, h*1.4);
+    controls.target.set(0, center.y, 0);
+    controls.update();
+    showGuide(MARKER_GUIDES[MARKER_ORDER[0]]);setStatus('step','マーカー配置')}
   if(step==='animate'){$('sidebar-anim').classList.add('visible');controls.enabled=true;setStatus('step','アニメーション再生')}
   onResize();
 }
@@ -338,7 +348,9 @@ function onCanvasTap(e){
   const hits=raycaster.intersectObjects(state.modelMeshes,true);
   if(!hits.length)return;
   const pt=hits[0].point, key=MARKER_ORDER[state.markerStep], col=MARKER_COLORS[key];
-  if(key==='chin'||key==='groin'){state.markers[key]=pt.clone();addMarkerSphere(pt,col)}
+  if(key==='chin'||key==='groin'){
+    const snapped=pt.clone(); snapped.x=0; // snap to midline
+    state.markers[key]=snapped;addMarkerSphere(snapped,col)}
   else{
     state.markers[key+'_l']=pt.clone();addMarkerSphere(pt,col);
     if(state.useSymmetry){const m=pt.clone();m.x=-m.x;state.markers[key+'_r']=m;addMarkerSphere(m,col)}
@@ -365,12 +377,16 @@ function generateSkeleton(){
   const spine2=new THREE.Vector3().lerpVectors(hips,chin,0.55);
   const neck=new THREE.Vector3().lerpVectors(hips,chin,0.80);
   const lE=m.elbows_l,rE=m.elbows_r,lW=m.wrists_l,rW=m.wrists_r,lK=m.knees_l,rK=m.knees_r;
-  const lSh=new THREE.Vector3().lerpVectors(spine2,lE||lW,0.25);
-  const rSh=new THREE.Vector3().lerpVectors(spine2,rE||rW,0.25);
-  const lArm=new THREE.Vector3().lerpVectors(lSh,lE||lW,0.5);
-  const rArm=new THREE.Vector3().lerpVectors(rSh,rE||rW,0.5);
-  const lUL=hips.clone();lUL.x+=(lK?lK.x-hips.x:0)*0.3;
-  const rUL=hips.clone();rUL.x+=(rK?rK.x-hips.x:0)*0.3;
+  // Shoulders: same height as neck, X offset toward arms
+  const lArmTarget=lE||lW, rArmTarget=rE||rW;
+  const lSh=new THREE.Vector3(lArmTarget.x*0.15, neck.y, neck.z);
+  const rSh=new THREE.Vector3(rArmTarget.x*0.15, neck.y, neck.z);
+  // UpperArm: between shoulder and elbow, closer to shoulder
+  const lArm=new THREE.Vector3().lerpVectors(lSh,lArmTarget,0.4);
+  const rArm=new THREE.Vector3().lerpVectors(rSh,rArmTarget,0.4);
+  // UpperLeg: hip level, offset sideways toward knees
+  const lUL=hips.clone(); lUL.x=(lK?lK.x:hips.x-0.15)*0.5;
+  const rUL=hips.clone(); rUL.x=(rK?rK.x:hips.x+0.15)*0.5;
   const lFt=(lK||lUL).clone();lFt.y=0.05; const rFt=(rK||rUL).clone();rFt.y=0.05;
   const lToe=lFt.clone();lToe.z+=0.1;lToe.y=0; const rToe=rFt.clone();rToe.z+=0.1;rToe.y=0;
 
