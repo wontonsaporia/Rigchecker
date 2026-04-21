@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Rigchecker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Space+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --surface: #222244;
+    --surface2: #2a2a4a;
+    --text: #e8e8f0;
+    --text2: #9999bb;
+    --accent: #e94560;
+    --accent2: #ff6b6b;
+    --green: #4ecdc4;
+    --blue: #45b7d1;
+    --yellow: #f9ca24;
+    --orange: #f0932b;
+    --purple: #a29bfe;
+    --sans: 'Noto Sans JP', sans-serif;
+    --mono: 'Space Mono', monospace;
+  }
+
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  .app-header {
+    height: 48px;
+    background: var(--bg2);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 100;
+  }
+  .app-logo {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .app-logo span { color: var(--text2); font-weight: 400; font-size: 11px; margin-left: 6px; }
+  .step-indicator {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .step-dot {
+    width: 28px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface2);
+    transition: background 0.3s;
+  }
+  .step-dot.active { background: var(--accent); }
+  .step-dot.done { background: var(--green); }
+
+  /* ── Main area ── */
+  .app-main {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── Canvas ── */
+  #canvas-container {
+    flex: 1;
+    position: relative;
+  }
+  #canvas-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* ── Screens ── */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    z-index: 10;
+  }
+  .screen.active { display: flex; }
+
+  /* ── Upload Screen ── */
+  #screen-upload {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+  }
+  .upload-area {
+    width: 340px;
+    max-width: 90%;
+    padding: 48px 32px;
+    border: 2px dashed rgba(255,255,255,0.15);
+    border-radius: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .upload-area:hover, .upload-area.dragover {
+    border-color: var(--accent);
+    background: rgba(233,69,96,0.05);
+  }
+  .upload-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+  .upload-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .upload-sub {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+  .upload-btn {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 28px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: background 0.2s;
+  }
+  .upload-btn:hover { background: var(--accent2); }
+  #file-input { display: none; }
+
+  /* ── Sidebar (marker + anim) ── */
+  .sidebar {
+    width: 260px;
+    background: var(--bg2);
+    border-left: 1px solid rgba(255,255,255,0.08);
+    display: none;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+  .sidebar.visible { display: flex; }
+  .sidebar-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 16px 16px 8px;
+    color: var(--text2);
+    text-transform: uppercase;
+  }
+  .sidebar-desc {
+    font-size: 12px;
+    color: var(--text2);
+    padding: 0 16px 16px;
+    line-height: 1.6;
+  }
+
+  /* ── Marker list ── */
+  .marker-list {
+    padding: 0 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .marker-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--mono);
+    transition: background 0.2s;
+    cursor: default;
+  }
+  .marker-item.current {
+    background: rgba(233,69,96,0.15);
+    outline: 1px solid rgba(233,69,96,0.3);
+  }
+  .marker-item.placed { opacity: 0.5; }
+  .marker-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2.5px solid currentColor;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+  }
+  .marker-dot.filled::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .marker-label { letter-spacing: 0.06em; }
+  .marker-status {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text2);
+  }
+
+  .m-chin { color: var(--blue); }
+  .m-wrists { color: var(--yellow); }
+  .m-elbows { color: var(--orange); }
+  .m-knees { color: var(--purple); }
+  .m-groin { color: var(--accent); }
+
+  /* ── Symmetry toggle ── */
+  .sym-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: 8px;
+  }
+  .sym-toggle input[type="checkbox"] {
+    accent-color: var(--green);
+    width: 16px;
+    height: 16px;
+  }
+
+  /* ── Rig button ── */
+  .rig-btn-wrap {
+    padding: 16px;
+    margin-top: auto;
+  }
+  .rig-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  .rig-btn:hover { background: var(--accent2); }
+  .rig-btn:active { transform: scale(0.97); }
+  .rig-btn:disabled {
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: not-allowed;
+  }
+
+  /* ── Back button ── */
+  .back-btn {
+    padding: 8px 16px;
+    margin: 12px 16px;
+    background: none;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--text2);
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .back-btn:hover { border-color: rgba(255,255,255,0.3); color: var(--text); }
+
+  /* ── Animation panel ── */
+  .anim-grid {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .anim-btn {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--sans);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .anim-btn:hover { background: var(--surface2); border-color: rgba(255,255,255,0.15); }
+  .anim-btn.active {
+    background: rgba(233,69,96,0.15);
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+  .anim-btn .anim-name { display: block; }
+  .anim-btn .anim-sub {
+    display: block;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  /* ── Loading overlay ── */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(26,26,46,0.92);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .loading-overlay.visible { display: flex; }
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid var(--surface2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text {
+    margin-top: 16px;
+    font-size: 14px;
+    color: var(--text2);
+  }
+
+  /* ── Status bar ── */
+  .status-bar {
+    height: 28px;
+    background: var(--bg2);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    flex-shrink: 0;
+    gap: 16px;
+  }
+  .status-bar .status-item { display: flex; align-items: center; gap: 4px; }
+
+  /* ── Guide overlay on canvas ── */
+  .guide-overlay {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    pointer-events: none;
+    z-index: 20;
+    white-space: nowrap;
+    display: none;
+  }
+  .guide-overlay.visible { display: block; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .sidebar { width: 220px; }
+  }
+  @media (max-width: 600px) {
+    .sidebar {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      z-index: 30;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="app-header">
+  <div class="app-logo">RIGCHECKER <span>v0.1</span></div>
+  <div class="step-indicator">
+    <div class="step-dot active" id="dot-upload"></div>
+    <div class="step-dot" id="dot-markers"></div>
+    <div class="step-dot" id="dot-animate"></div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="app-main">
+
+  <!-- 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Guide overlay -->
+  <div class="guide-overlay" id="guide-overlay"></div>
+
+  <!-- Upload Screen -->
+  <div class="screen active" id="screen-upload">
+    <div class="upload-area" id="upload-area">
+      <div class="upload-icon">📦</div>
+      <div class="upload-title">3Dモデルをアップロード</div>
+      <div class="upload-sub">
+        Nomad Sculpt で作った FBX ファイルを<br>選択またはドラッグ＆ドロップ
+      </div>
+      <button class="upload-btn" id="upload-btn">ファイルを選択</button>
+      <input type="file" id="file-input" accept=".fbx,.glb,.gltf,.obj">
+    </div>
+  </div>
+
+  <!-- Sidebar: Marker placement -->
+  <div class="sidebar" id="sidebar-markers">
+    <div class="sidebar-title">Place markers</div>
+    <div class="sidebar-desc">モデル上のマーカー位置をタップして、自動リギングを開始します。</div>
+
+    <div class="marker-list" id="marker-list">
+      <div class="marker-item current m-chin" data-marker="chin">
+        <div class="marker-dot"></div>
+        <span class="marker-label">CHIN</span>
+        <span class="marker-status">— タップしてください</span>
+      </div>
+      <div class="marker-item m-wrists" data-marker="wrists">
+        <div class="marker-dot"></div>
+        <span class="marker-label">WRISTS</span>
+        <span class="marker-status"></span>
+      </div>
+      <div class="marker-item m-elbows" data-marker="elbows">
+        <div class="marker-dot"></div>
+        <span class="marker-label">ELBOWS</span>
+        <span class="marker-status"></span>
+      </div>
+      <div class="marker-item m-knees" data-marker="knees">
+        <div class="marker-dot"></div>
+        <span class="marker-label">KNEES</span>
+        <span class="marker-status"></span>
+      </div>
+      <div class="marker-item m-groin" data-marker="groin">
+        <div class="marker-dot"></div>
+        <span class="marker-label">GROIN</span>
+        <span class="marker-status"></span>
+      </div>
+    </div>
+
+    <div class="sym-toggle">
+      <input type="checkbox" id="sym-check" checked>
+      <label for="sym-check">Use Symmetry</label>
+    </div>
+
+    <div class="rig-btn-wrap">
+      <button class="back-btn" id="btn-back-upload">BACK</button>
+      <button class="rig-btn" id="btn-rig" disabled>リグ生成</button>
+    </div>
+  </div>
+
+  <!-- Sidebar: Animation -->
+  <div class="sidebar" id="sidebar-anim">
+    <div class="sidebar-title">Animations</div>
+    <div class="sidebar-desc">アニメーションを選んでプレビュー</div>
+
+    <div class="anim-grid" id="anim-grid">
+      <div class="anim-btn" data-anim="idle">
+        <span class="anim-name">Idle</span>
+        <span class="anim-sub">待機ポーズ</span>
+      </div>
+      <div class="anim-btn" data-anim="dance">
+        <span class="anim-name">Dance</span>
+        <span class="anim-sub">ダンス</span>
+      </div>
+      <div class="anim-btn" data-anim="walk">
+        <span class="anim-name">Walk</span>
+        <span class="anim-sub">歩行</span>
+      </div>
+      <div class="anim-btn" data-anim="jump">
+        <span class="anim-name">Jump</span>
+        <span class="anim-sub">ジャンプ</span>
+      </div>
+      <div class="anim-btn" data-anim="wave">
+        <span class="anim-name">Wave</span>
+        <span class="anim-sub">手振り</span>
+      </div>
+    </div>
+
+    <div class="rig-btn-wrap">
+      <button class="back-btn" id="btn-back-markers">BACK</button>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-text">読み込み中...</div>
+  </div>
+
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <div class="status-item" id="status-poly">ポリゴン: —</div>
+  <div class="status-item" id="status-fps">FPS: —</div>
+  <div class="status-item" id="status-step">ステップ: アップロード待ち</div>
+</div>
+
+<!-- Three.js -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// ═══════════════════════════════════════
+//  App state
+// ═══════════════════════════════════════
+const state = {
+  currentStep: 'upload',  // upload | markers | animate
+  model: null,
+  modelMesh: null,
+  markerStep: 0,
+  markers: {
+    chin: null,
+    wrists_l: null, wrists_r: null,
+    elbows_l: null, elbows_r: null,
+    knees_l: null, knees_r: null,
+    groin: null,
+  },
+  markerSpheres: [],
+  skeleton: null,
+  skinnedMesh: null,
+  mixer: null,
+  currentAction: null,
+  animClips: {},
+  useSymmetry: true,
+  clock: new THREE.Clock(),
+  polyCount: 0,
+};
+
+const MARKER_ORDER = ['chin', 'wrists', 'elbows', 'knees', 'groin'];
+const MARKER_COLORS = {
+  chin: 0x45b7d1,
+  wrists: 0xf9ca24,
+  elbows: 0xf0932b,
+  knees: 0xa29bfe,
+  groin: 0xe94560,
+};
+const MARKER_GUIDES = {
+  chin: 'あご の位置をタップ',
+  wrists: '手首 をタップ（片側）',
+  elbows: 'ひじ をタップ（片側）',
+  knees: 'ひざ をタップ（片側）',
+  groin: '股間 の位置をタップ',
+};
+
+// Mixamo bone hierarchy
+const MIXAMO_BONES = [
+  'mixamorigHips',
+  'mixamorigSpine', 'mixamorigSpine1', 'mixamorigSpine2',
+  'mixamorigNeck', 'mixamorigHead', 'mixamorigHeadTop_End',
+  'mixamorigLeftShoulder', 'mixamorigLeftArm', 'mixamorigLeftForeArm', 'mixamorigLeftHand',
+  'mixamorigRightShoulder', 'mixamorigRightArm', 'mixamorigRightForeArm', 'mixamorigRightHand',
+  'mixamorigLeftUpLeg', 'mixamorigLeftLeg', 'mixamorigLeftFoot', 'mixamorigLeftToeBase',
+  'mixamorigRightUpLeg', 'mixamorigRightLeg', 'mixamorigRightFoot', 'mixamorigRightToeBase',
+];
+
+
+// ═══════════════════════════════════════
+//  Scene setup
+// ═══════════════════════════════════════
+const container = document.getElementById('canvas-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x1a1a2e);
+renderer.shadowMap.enabled = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+camera.position.set(0, 1.2, 3);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0.8, 0);
+controls.enabled = false;
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x404060, 1.5);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+dirLight.position.set(3, 5, 4);
+dirLight.castShadow = true;
+scene.add(dirLight);
+const fillLight = new THREE.DirectionalLight(0x4488cc, 0.6);
+fillLight.position.set(-3, 2, -2);
+scene.add(fillLight);
+
+// Ground grid
+const gridHelper = new THREE.GridHelper(6, 12, 0x333355, 0x222244);
+scene.add(gridHelper);
+
+// Raycaster for marker placement
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+
+// ═══════════════════════════════════════
+//  Resize handling
+// ═══════════════════════════════════════
+function onResize() {
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+
+
+// ═══════════════════════════════════════
+//  UI helpers
+// ═══════════════════════════════════════
+const $ = id => document.getElementById(id);
+const guide = $('guide-overlay');
+const loadingOverlay = $('loading-overlay');
+const loadingText = $('loading-text');
+
+function showLoading(text) {
+  loadingText.textContent = text;
+  loadingOverlay.classList.add('visible');
+}
+function hideLoading() {
+  loadingOverlay.classList.remove('visible');
+}
+function showGuide(text) {
+  guide.textContent = text;
+  guide.classList.add('visible');
+}
+function hideGuide() {
+  guide.classList.remove('visible');
+}
+function setStatus(key, val) {
+  const el = $('status-' + key);
+  if (el) el.textContent = el.textContent.split(':')[0] + ': ' + val;
+}
+
+function updateStepDots() {
+  const steps = ['upload', 'markers', 'animate'];
+  const idx = steps.indexOf(state.currentStep);
+  steps.forEach((s, i) => {
+    const dot = $('dot-' + s);
+    dot.className = 'step-dot';
+    if (i < idx) dot.classList.add('done');
+    if (i === idx) dot.classList.add('active');
+  });
+}
+
+function goToStep(step) {
+  state.currentStep = step;
+  updateStepDots();
+
+  // Hide all screens and sidebars
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $('sidebar-markers').classList.remove('visible');
+  $('sidebar-anim').classList.remove('visible');
+  hideGuide();
+
+  switch (step) {
+    case 'upload':
+      $('screen-upload').classList.add('active');
+      controls.enabled = false;
+      setStatus('step', 'アップロード待ち');
+      break;
+    case 'markers':
+      $('sidebar-markers').classList.add('visible');
+      controls.enabled = true;
+      resetMarkers();
+      showGuide(MARKER_GUIDES[MARKER_ORDER[0]]);
+      setStatus('step', 'マーカー配置');
+      break;
+    case 'animate':
+      $('sidebar-anim').classList.add('visible');
+      controls.enabled = true;
+      hideGuide();
+      setStatus('step', 'アニメーション再生');
+      break;
+  }
+  onResize();
+}
+
+
+// ═══════════════════════════════════════
+//  File upload
+// ═══════════════════════════════════════
+const uploadArea = $('upload-area');
+const fileInput = $('file-input');
+
+$('upload-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  fileInput.click();
+});
+uploadArea.addEventListener('click', () => fileInput.click());
+
+uploadArea.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadArea.classList.add('dragover');
+});
+uploadArea.addEventListener('dragleave', () => {
+  uploadArea.classList.remove('dragover');
+});
+uploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  if (e.dataTransfer.files.length) loadModelFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) loadModelFile(fileInput.files[0]);
+});
+
+
+// ═══════════════════════════════════════
+//  Model loading
+// ═══════════════════════════════════════
+function loadModelFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  showLoading('モデルを読み込み中...');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const buffer = e.target.result;
+
+    if (ext === 'fbx') {
+      const loader = new FBXLoader();
+      try {
+        const object = loader.parse(buffer);
+        onModelLoaded(object);
+      } catch(err) {
+        hideLoading();
+        alert('FBXの読み込みに失敗しました:\n' + err.message);
+        console.error(err);
+      }
+    } else if (ext === 'glb' || ext === 'gltf') {
+      import('three/addons/loaders/GLTFLoader.js').then(({ GLTFLoader }) => {
+        const loader = new GLTFLoader();
+        loader.parse(buffer, '', gltf => {
+          onModelLoaded(gltf.scene);
+        }, err => {
+          hideLoading();
+          alert('GLBの読み込みに失敗しました:\n' + err.message);
+        });
+      });
+    } else {
+      hideLoading();
+      alert('対応していないファイル形式です。FBX または GLB を使用してください。');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function onModelLoaded(object) {
+  // Remove previous model
+  if (state.model) scene.remove(state.model);
+
+  state.model = object;
+
+  // Normalize scale and center
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const scale = 2.0 / maxDim;
+  object.scale.multiplyScalar(scale);
+
+  box.setFromObject(object);
+  box.getCenter(center);
+  object.position.sub(center);
+  object.position.y -= box.min.y * scale;
+
+  // Ensure material is visible
+  object.traverse(child => {
+    if (child.isMesh) {
+      state.modelMesh = child;
+      child.material = new THREE.MeshStandardMaterial({
+        color: 0x8888aa,
+        roughness: 0.6,
+        metalness: 0.1,
+        side: THREE.DoubleSide,
+      });
+      child.castShadow = true;
+      child.receiveShadow = true;
+
+      // Count polys
+      if (child.geometry) {
+        const idx = child.geometry.index;
+        state.polyCount += idx ? idx.count / 3 : child.geometry.attributes.position.count / 3;
+      }
+    }
+  });
+
+  scene.add(object);
+  setStatus('poly', state.polyCount.toLocaleString());
+
+  // Adjust camera
+  controls.target.set(0, size.y * scale * 0.45, 0);
+  camera.position.set(0, size.y * scale * 0.5, size.y * scale * 1.5);
+  controls.update();
+
+  hideLoading();
+  goToStep('markers');
+}
+
+
+// ═══════════════════════════════════════
+//  Marker placement
+// ═══════════════════════════════════════
+function resetMarkers() {
+  state.markerStep = 0;
+  Object.keys(state.markers).forEach(k => state.markers[k] = null);
+  state.markerSpheres.forEach(s => scene.remove(s));
+  state.markerSpheres = [];
+  updateMarkerUI();
+  $('btn-rig').disabled = true;
+}
+
+function updateMarkerUI() {
+  const items = document.querySelectorAll('.marker-item');
+  const currentKey = MARKER_ORDER[state.markerStep];
+
+  items.forEach(item => {
+    const key = item.dataset.marker;
+    const dot = item.querySelector('.marker-dot');
+    const status = item.querySelector('.marker-status');
+
+    item.classList.remove('current', 'placed');
+    dot.classList.remove('filled');
+
+    if (key === currentKey && state.markerStep < MARKER_ORDER.length) {
+      item.classList.add('current');
+      status.textContent = '— タップしてください';
+    }
+
+    // Check if placed
+    const isPlaced = isMarkerPlaced(key);
+    if (isPlaced) {
+      item.classList.add('placed');
+      dot.classList.add('filled');
+      status.textContent = '✓';
+    }
+  });
+}
+
+function isMarkerPlaced(key) {
+  switch (key) {
+    case 'chin': return state.markers.chin !== null;
+    case 'wrists': return state.markers.wrists_l !== null;
+    case 'elbows': return state.markers.elbows_l !== null;
+    case 'knees': return state.markers.knees_l !== null;
+    case 'groin': return state.markers.groin !== null;
+    default: return false;
+  }
+}
+
+function addMarkerSphere(position, colorHex) {
+  const geo = new THREE.SphereGeometry(0.03, 12, 12);
+  const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+  const sphere = new THREE.Mesh(geo, mat);
+  sphere.position.copy(position);
+  scene.add(sphere);
+  state.markerSpheres.push(sphere);
+
+  // Add ring
+  const ringGeo = new THREE.RingGeometry(0.04, 0.055, 24);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: colorHex,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.6,
+  });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.position.copy(position);
+  ring.lookAt(camera.position);
+  scene.add(ring);
+  state.markerSpheres.push(ring);
+}
+
+function onCanvasTap(event) {
+  if (state.currentStep !== 'markers') return;
+  if (state.markerStep >= MARKER_ORDER.length) return;
+  if (!state.modelMesh) return;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+  pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(pointer, camera);
+
+  // Collect all meshes from model
+  const meshes = [];
+  state.model.traverse(child => {
+    if (child.isMesh) meshes.push(child);
+  });
+
+  const intersects = raycaster.intersectObjects(meshes, false);
+  if (intersects.length === 0) return;
+
+  const point = intersects[0].point;
+  const currentKey = MARKER_ORDER[state.markerStep];
+  const color = MARKER_COLORS[currentKey];
+
+  switch (currentKey) {
+    case 'chin':
+      state.markers.chin = point.clone();
+      addMarkerSphere(point, color);
+      break;
+    case 'groin':
+      state.markers.groin = point.clone();
+      addMarkerSphere(point, color);
+      break;
+    case 'wrists':
+      state.markers.wrists_l = point.clone();
+      addMarkerSphere(point, color);
+      if (state.useSymmetry) {
+        const mirrored = point.clone();
+        mirrored.x = -mirrored.x;
+        state.markers.wrists_r = mirrored;
+        addMarkerSphere(mirrored, color);
+      }
+      break;
+    case 'elbows':
+      state.markers.elbows_l = point.clone();
+      addMarkerSphere(point, color);
+      if (state.useSymmetry) {
+        const mirrored = point.clone();
+        mirrored.x = -mirrored.x;
+        state.markers.elbows_r = mirrored;
+        addMarkerSphere(mirrored, color);
+      }
+      break;
+    case 'knees':
+      state.markers.knees_l = point.clone();
+      addMarkerSphere(point, color);
+      if (state.useSymmetry) {
+        const mirrored = point.clone();
+        mirrored.x = -mirrored.x;
+        state.markers.knees_r = mirrored;
+        addMarkerSphere(mirrored, color);
+      }
+      break;
+  }
+
+  state.markerStep++;
+  updateMarkerUI();
+
+  if (state.markerStep < MARKER_ORDER.length) {
+    showGuide(MARKER_GUIDES[MARKER_ORDER[state.markerStep]]);
+  } else {
+    hideGuide();
+    showGuide('すべてのマーカーが配置されました！「リグ生成」をタップ');
+    $('btn-rig').disabled = false;
+  }
+}
+
+// Distinguish taps from orbit drags
+let tapStart = null;
+renderer.domElement.addEventListener('pointerdown', e => {
+  tapStart = { x: e.clientX, y: e.clientY, time: Date.now() };
+});
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!tapStart) return;
+  const dx = e.clientX - tapStart.x;
+  const dy = e.clientY - tapStart.y;
+  const dt = Date.now() - tapStart.time;
+  // Only count as tap if moved < 8px and duration < 300ms
+  if (Math.sqrt(dx*dx + dy*dy) < 8 && dt < 300) {
+    onCanvasTap(e);
+  }
+  tapStart = null;
+});
+
+$('sym-check').addEventListener('change', e => {
+  state.useSymmetry = e.target.checked;
+});
+
+
+// ═══════════════════════════════════════
+//  Skeleton generation
+// ═══════════════════════════════════════
+function generateSkeleton() {
+  const m = state.markers;
+
+  // Compute intermediate positions
+  const hips = m.groin.clone();
+  const head = m.chin.clone();
+  head.y += (head.y - hips.y) * 0.15; // Extend above chin
+
+  const spine = new THREE.Vector3().lerpVectors(hips, head, 0.2);
+  const spine1 = new THREE.Vector3().lerpVectors(hips, head, 0.4);
+  const spine2 = new THREE.Vector3().lerpVectors(hips, head, 0.65);
+  const neck = new THREE.Vector3().lerpVectors(hips, head, 0.85);
+  const headTop = head.clone();
+  headTop.y += 0.15;
+
+  // Shoulders — between spine2 and elbows
+  const leftShoulder = new THREE.Vector3().lerpVectors(spine2, m.elbows_l || m.wrists_l, 0.3);
+  const rightShoulder = new THREE.Vector3().lerpVectors(spine2, m.elbows_r || m.wrists_r, 0.3);
+
+  // Arms
+  const leftArm = m.elbows_l ? new THREE.Vector3().lerpVectors(leftShoulder, m.elbows_l, 0.6) : leftShoulder.clone();
+  const rightArm = m.elbows_r ? new THREE.Vector3().lerpVectors(rightShoulder, m.elbows_r, 0.6) : rightShoulder.clone();
+  const leftForeArm = m.elbows_l || m.wrists_l;
+  const rightForeArm = m.elbows_r || m.wrists_r;
+  const leftHand = m.wrists_l;
+  const rightHand = m.wrists_r;
+
+  // Legs
+  const leftUpLeg = new THREE.Vector3(
+    hips.x + (m.knees_l ? (m.knees_l.x - hips.x) * 0.3 : -0.1),
+    hips.y,
+    hips.z
+  );
+  const rightUpLeg = new THREE.Vector3(
+    hips.x + (m.knees_r ? (m.knees_r.x - hips.x) * 0.3 : 0.1),
+    hips.y,
+    hips.z
+  );
+  const leftLeg = m.knees_l || leftUpLeg.clone();
+  const rightLeg = m.knees_r || rightUpLeg.clone();
+
+  // Feet — estimate below knees
+  const leftFoot = m.knees_l ? m.knees_l.clone() : leftLeg.clone();
+  leftFoot.y = 0.05;
+  const rightFoot = m.knees_r ? m.knees_r.clone() : rightLeg.clone();
+  rightFoot.y = 0.05;
+  const leftToe = leftFoot.clone(); leftToe.z += 0.1; leftToe.y = 0;
+  const rightToe = rightFoot.clone(); rightToe.z += 0.1; rightToe.y = 0;
+
+  // Build bone hierarchy
+  const bones = [];
+  const boneMap = {};
+
+  function makeBone(name, pos) {
+    const bone = new THREE.Bone();
+    bone.name = name;
+    bone.position.copy(pos);
+    bones.push(bone);
+    boneMap[name] = bone;
+    return bone;
+  }
+
+  // Create all bones with WORLD positions first
+  const boneData = {
+    mixamorigHips: hips,
+    mixamorigSpine: spine,
+    mixamorigSpine1: spine1,
+    mixamorigSpine2: spine2,
+    mixamorigNeck: neck,
+    mixamorigHead: m.chin,
+    mixamorigHeadTop_End: headTop,
+    mixamorigLeftShoulder: leftShoulder,
+    mixamorigLeftArm: leftArm,
+    mixamorigLeftForeArm: leftForeArm,
+    mixamorigLeftHand: leftHand,
+    mixamorigRightShoulder: rightShoulder,
+    mixamorigRightArm: rightArm,
+    mixamorigRightForeArm: rightForeArm,
+    mixamorigRightHand: rightHand,
+    mixamorigLeftUpLeg: leftUpLeg,
+    mixamorigLeftLeg: leftLeg,
+    mixamorigLeftFoot: leftFoot,
+    mixamorigLeftToeBase: leftToe,
+    mixamorigRightUpLeg: rightUpLeg,
+    mixamorigRightLeg: rightLeg,
+    mixamorigRightFoot: rightFoot,
+    mixamorigRightToeBase: rightToe,
+  };
+
+  // Create bones
+  for (const [name, pos] of Object.entries(boneData)) {
+    makeBone(name, pos);
+  }
+
+  // Define parent-child relationships
+  const hierarchy = {
+    mixamorigHips: ['mixamorigSpine', 'mixamorigLeftUpLeg', 'mixamorigRightUpLeg'],
+    mixamorigSpine: ['mixamorigSpine1'],
+    mixamorigSpine1: ['mixamorigSpine2'],
+    mixamorigSpine2: ['mixamorigNeck', 'mixamorigLeftShoulder', 'mixamorigRightShoulder'],
+    mixamorigNeck: ['mixamorigHead'],
+    mixamorigHead: ['mixamorigHeadTop_End'],
+    mixamorigLeftShoulder: ['mixamorigLeftArm'],
+    mixamorigLeftArm: ['mixamorigLeftForeArm'],
+    mixamorigLeftForeArm: ['mixamorigLeftHand'],
+    mixamorigRightShoulder: ['mixamorigRightArm'],
+    mixamorigRightArm: ['mixamorigRightForeArm'],
+    mixamorigRightForeArm: ['mixamorigRightHand'],
+    mixamorigLeftUpLeg: ['mixamorigLeftLeg'],
+    mixamorigLeftLeg: ['mixamorigLeftFoot'],
+    mixamorigLeftFoot: ['mixamorigLeftToeBase'],
+    mixamorigRightUpLeg: ['mixamorigRightLeg'],
+    mixamorigRightLeg: ['mixamorigRightFoot'],
+    mixamorigRightFoot: ['mixamorigRightToeBase'],
+  };
+
+  // Set up hierarchy
+  for (const [parentName, childNames] of Object.entries(hierarchy)) {
+    const parent = boneMap[parentName];
+    for (const childName of childNames) {
+      const child = boneMap[childName];
+      parent.add(child);
+      // Convert child position from world to local (relative to parent)
+      const worldPos = boneData[childName].clone();
+      const parentWorldPos = boneData[parentName].clone();
+      child.position.copy(worldPos.sub(parentWorldPos));
+    }
+  }
+
+  // Root bone keeps world position
+  const rootBone = boneMap['mixamorigHips'];
+
+  // Create skeleton
+  const skeleton = new THREE.Skeleton(bones);
+  state.skeleton = skeleton;
+
+  return { skeleton, rootBone, bones, boneMap, boneData };
+}
+
+
+// ═══════════════════════════════════════
+//  Auto-skinning
+// ═══════════════════════════════════════
+function createSkinnedMesh(skelData) {
+  const { skeleton, rootBone, bones, boneData } = skelData;
+
+  // Get geometry from loaded model
+  let srcGeo = null;
+  state.model.traverse(child => {
+    if (child.isMesh && child.geometry) {
+      srcGeo = child.geometry.clone();
+    }
+  });
+
+  if (!srcGeo) {
+    alert('メッシュジオメトリが見つかりませんでした');
+    return null;
+  }
+
+  // Apply model's world transform to geometry
+  srcGeo.applyMatrix4(state.model.matrixWorld);
+
+  // Compute skinning weights — nearest bone assignment
+  const positions = srcGeo.attributes.position;
+  const vertexCount = positions.count;
+
+  // Collect bone world positions
+  const bonePositions = [];
+  const boneNames = Object.keys(boneData);
+  for (const name of boneNames) {
+    bonePositions.push(boneData[name]);
+  }
+
+  // For each vertex, find the 4 nearest bones
+  const skinIndices = new Float32Array(vertexCount * 4);
+  const skinWeights = new Float32Array(vertexCount * 4);
+  const tempV = new THREE.Vector3();
+
+  for (let i = 0; i < vertexCount; i++) {
+    tempV.fromBufferAttribute(positions, i);
+
+    // Compute distances to all bones
+    const dists = bonePositions.map((bp, idx) => ({
+      idx: idx,
+      dist: tempV.distanceTo(bp),
+    }));
+    dists.sort((a, b) => a.dist - b.dist);
+
+    // Assign top 4 bones with inverse distance weighting
+    const top4 = dists.slice(0, 4);
+    const minDist = 0.001;
+    let totalWeight = 0;
+    const weights = top4.map(d => {
+      const w = 1.0 / Math.max(d.dist, minDist);
+      totalWeight += w;
+      return w;
+    });
+
+    for (let j = 0; j < 4; j++) {
+      skinIndices[i * 4 + j] = top4[j] ? top4[j].idx : 0;
+      skinWeights[i * 4 + j] = top4[j] ? weights[j] / totalWeight : 0;
+    }
+  }
+
+  srcGeo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(
+    new Uint16Array(skinIndices), 4
+  ));
+  srcGeo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
+
+  // Create skinned mesh
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x8888aa,
+    roughness: 0.6,
+    metalness: 0.1,
+    side: THREE.DoubleSide,
+    skinning: true,
+  });
+
+  const skinnedMesh = new THREE.SkinnedMesh(srcGeo, mat);
+  skinnedMesh.add(rootBone);
+  skinnedMesh.bind(skeleton);
+  skinnedMesh.castShadow = true;
+  skinnedMesh.receiveShadow = true;
+
+  return skinnedMesh;
+}
+
+
+// ═══════════════════════════════════════
+//  Rig generation flow
+// ═══════════════════════════════════════
+$('btn-rig').addEventListener('click', () => {
+  showLoading('リグを生成中...');
+
+  setTimeout(() => {
+    try {
+      const skelData = generateSkeleton();
+      const skinnedMesh = createSkinnedMesh(skelData);
+
+      if (!skinnedMesh) {
+        hideLoading();
+        return;
+      }
+
+      // Remove original model and markers
+      scene.remove(state.model);
+      state.markerSpheres.forEach(s => scene.remove(s));
+      state.markerSpheres = [];
+
+      // Add skinned mesh
+      state.skinnedMesh = skinnedMesh;
+      scene.add(skinnedMesh);
+
+      // Add skeleton helper for debug
+      const skelHelper = new THREE.SkeletonHelper(skinnedMesh);
+      skelHelper.material.linewidth = 2;
+      scene.add(skelHelper);
+
+      // Create mixer
+      state.mixer = new THREE.AnimationMixer(skinnedMesh);
+
+      hideLoading();
+      goToStep('animate');
+
+    } catch(err) {
+      hideLoading();
+      alert('リグ生成に失敗しました:\n' + err.message);
+      console.error(err);
+    }
+  }, 500);
+});
+
+
+// ═══════════════════════════════════════
+//  Animation loading
+// ═══════════════════════════════════════
+function loadAnimationFBX(url, name) {
+  return new Promise((resolve, reject) => {
+    const loader = new FBXLoader();
+    loader.load(url, (object) => {
+      if (object.animations && object.animations.length > 0) {
+        const clip = object.animations[0];
+        clip.name = name;
+
+        // Retarget: animation tracks reference bones by name
+        // Since we used Mixamo naming, tracks should match automatically
+        state.animClips[name] = clip;
+        resolve(clip);
+      } else {
+        reject(new Error('No animations found in ' + name));
+      }
+    }, undefined, reject);
+  });
+}
+
+function playAnimation(name) {
+  if (!state.mixer || !state.animClips[name]) return;
+
+  if (state.currentAction) {
+    state.currentAction.fadeOut(0.3);
+  }
+
+  const clip = state.animClips[name];
+  const action = state.mixer.clipAction(clip);
+  action.reset().fadeIn(0.3).play();
+  state.currentAction = action;
+
+  // Update UI
+  document.querySelectorAll('.anim-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.anim === name);
+  });
+}
+
+// Animation button handlers
+document.querySelectorAll('.anim-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const name = btn.dataset.anim;
+    if (state.animClips[name]) {
+      playAnimation(name);
+    } else {
+      // Try to load from /animations/ directory
+      const url = `animations/${name}.fbx`;
+      showLoading(`${name} を読み込み中...`);
+      loadAnimationFBX(url, name)
+        .then(() => {
+          hideLoading();
+          playAnimation(name);
+        })
+        .catch(err => {
+          hideLoading();
+          console.warn('Animation load failed:', err);
+          alert(`アニメーション "${name}" の読み込みに失敗しました。\nanimations/${name}.fbx が配置されているか確認してください。`);
+        });
+    }
+  });
+});
+
+
+// ═══════════════════════════════════════
+//  Navigation buttons
+// ═══════════════════════════════════════
+$('btn-back-upload').addEventListener('click', () => {
+  if (state.skinnedMesh) scene.remove(state.skinnedMesh);
+  state.markerSpheres.forEach(s => scene.remove(s));
+  if (state.model) scene.add(state.model);
+  goToStep('upload');
+});
+
+$('btn-back-markers').addEventListener('click', () => {
+  if (state.skinnedMesh) scene.remove(state.skinnedMesh);
+  if (state.model) scene.add(state.model);
+  if (state.mixer) {
+    state.mixer.stopAllAction();
+    state.mixer = null;
+  }
+  goToStep('markers');
+});
+
+
+// ═══════════════════════════════════════
+//  Render loop
+// ═══════════════════════════════════════
+let frameCount = 0;
+let lastFpsTime = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const delta = state.clock.getDelta();
+
+  // Update mixer
+  if (state.mixer) state.mixer.update(delta);
+
+  // Update controls
+  controls.update();
+
+  // Render
+  renderer.render(scene, camera);
+
+  // FPS counter
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime > 1000) {
+    setStatus('fps', frameCount);
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+}
+
+// ═══════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════
+onResize();
+animate();
+goToStep('upload');
+
+</script>
+</body>
+</html>
