@@ -27,15 +27,16 @@ cd rigchecker
    - Format: **FBX Binary (.fbx)**  
    - Skin: **Without Skin**  
    - Frames per Second: **30**
-4. ダウンロードしたファイルを `animations/` に配置・リネーム
+4. ダウンロードしたファイルを `animations/` にそのまま配置（リネーム不要）
 
-| ファイル名 | 内容 | Mixamo 検索キーワード例 |
+| ファイル名 | 内容 | Mixamo 検索キーワード |
 |-----------|------|----------------------|
-| `idle.fbx` | 待機ポーズ | "Idle", "Breathing Idle" |
-| `dance.fbx` | ダンス | "Hip Hop Dancing", "Silly Dancing" |
-| `walk.fbx` | 歩行 | "Walking", "Slow Walk" |
-| `jump.fbx` | ジャンプ | "Jumping", "Jump" |
-| `wave.fbx` | 手振り | "Waving", "Happy Hand Gesture" |
+| `Breathing Idle.fbx` | 待機ポーズ | Breathing Idle |
+| `Shoping Cart Dance.fbx` | ダンス① | Shoping Cart Dance |
+| `Northern Soul Spin Combo.fbx` | ダンス② | Northern Soul Spin Combo |
+| `Walking.fbx` | 歩行 | Walking |
+| `Standing Jump.fbx` | ジャンプ | Standing Jump |
+| `Waving.fbx` | 手振り | Waving |
 
 ### ローカル確認
 
@@ -60,15 +61,16 @@ URL: `https://wontonsaporia.github.io/rigchecker/`
 
 ```
 rigchecker/
-├── index.html              ← アプリ本体
+├── index.html                       ← アプリ本体
 ├── README.md
 └── animations/
-    ├── README.md            ← アニメーション配置ガイド
-    ├── idle.fbx
-    ├── dance.fbx
-    ├── walk.fbx
-    ├── jump.fbx
-    └── wave.fbx
+    ├── README.md                    ← アニメーション配置ガイド
+    ├── Breathing Idle.fbx
+    ├── Shoping Cart Dance.fbx
+    ├── Northern Soul Spin Combo.fbx
+    ├── Walking.fbx
+    ├── Standing Jump.fbx
+    └── Waving.fbx
 ```
 
 ## 関連ドキュメント
