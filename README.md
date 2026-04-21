@@ -32,7 +32,7 @@ cd rigchecker
 | ファイル名 | 内容 | Mixamo 検索キーワード |
 |-----------|------|----------------------|
 | `Breathing Idle.fbx` | 待機ポーズ | Breathing Idle |
-| `Shoping Cart Dance.fbx` | ダンス① | Shoping Cart Dance |
+| `Shopping Cart Dance.fbx` | ダンス① | Shopping Cart Dance |
 | `Northern Soul Spin Combo.fbx` | ダンス② | Northern Soul Spin Combo |
 | `Walking.fbx` | 歩行 | Walking |
 | `Standing Jump.fbx` | ジャンプ | Standing Jump |
@@ -66,7 +66,7 @@ rigchecker/
 └── animations/
     ├── README.md                    ← アニメーション配置ガイド
     ├── Breathing Idle.fbx
-    ├── Shoping Cart Dance.fbx
+    ├── Shopping Cart Dance.fbx
     ├── Northern Soul Spin Combo.fbx
     ├── Walking.fbx
     ├── Standing Jump.fbx
