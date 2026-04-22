@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rigchecker — Full Pipeline Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e8e8f0; font-family: 'Noto Sans JP', sans-serif; overflow: hidden; }
+  #canvas { width: 100vw; height: 100vh; display: block; }
+  #panel {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(0,0,0,0.8); padding: 14px 18px; border-radius: 8px;
+    font-size: 12px; line-height: 1.8; max-width: 340px;
+    font-family: 'Space Mono', monospace;
+  }
+  #panel h3 { font-size: 14px; margin-bottom: 8px; color: #e94560; }
+  .st { color: #9999bb; margin-bottom: 2px; }
+  .st.ok { color: #4ecdc4; }
+  .st.err { color: #ff6b6b; }
+  .st.working { color: #f9ca24; }
+  .btn {
+    display: inline-block; margin: 6px 4px 0 0; padding: 8px 16px;
+    background: #e94560; color: #fff; border: none; border-radius: 6px;
+    font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .btn:hover { background: #ff6b6b; }
+  .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .btn.anim { background: #222244; border: 1px solid #444; }
+  .btn.anim:hover { background: #2a2a5a; }
+  .btn.anim.active { background: rgba(233,69,96,0.2); border-color: #e94560; color: #e94560; }
+  #file-input { display: none; }
+  .anim-row { margin-top: 10px; display: none; flex-wrap: wrap; gap: 4px; }
+  .anim-row.visible { display: flex; }
+  .separator { height: 1px; background: #333; margin: 10px 0; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="panel">
+  <h3>Full Pipeline Test</h3>
+  <div class="st" id="st-ref">1. Reference: loading...</div>
+  <div class="st" id="st-model">2. Model: —</div>
+  <div class="st" id="st-fit">3. Fit: —</div>
+  <div class="st" id="st-skin">4. Skin: —</div>
+  <div class="st" id="st-anim">5. Anim: —</div>
+  <div class="separator"></div>
+  <button class="btn" id="btn-upload">モデルをアップロード</button>
+  <button class="btn" id="btn-rig" disabled>リグ生成＋スキニング</button>
+  <input type="file" id="file-input" accept=".fbx">
+  <div class="anim-row" id="anim-row">
+    <button class="btn anim" data-anim="Breathing Idle">Idle</button>
+    <button class="btn anim" data-anim="Shopping Cart Dance">Dance1</button>
+    <button class="btn anim" data-anim="Northern Soul Spin Combo">Dance2</button>
+    <button class="btn anim" data-anim="Walking">Walk</button>
+    <button class="btn anim" data-anim="Standing Jump">Jump</button>
+    <button class="btn anim" data-anim="Waving">Wave</button>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// ── FBX patch for Nomad ──
+const _origParse = FBXLoader.prototype.parse;
+FBXLoader.prototype.parse = function(buffer, path) {
+  try { return _origParse.call(this, buffer, path); }
+  catch(err) {
+    if (err.message && err.message.includes('MappingInformationType')) {
+      console.warn('[patch] Neutralizing LayerElementColor');
+      const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer || buffer);
+      const needle = [76,97,121,101,114,69,108,101,109,101,110,116,67,111,108,111,114];
+      for (let i = 0; i < bytes.length - needle.length; i++) {
+        let m = true;
+        for (let j = 0; j < needle.length; j++) { if (bytes[i+j] !== needle[j]) { m = false; break; } }
+        if (m) bytes[i + 12] = 88;
+      }
+      return _origParse.call(this, bytes.buffer, path);
+    }
+    throw err;
+  }
+};
+
+// ── Scene ──
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x1a1a2e);
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(0, 1, 3);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.target.set(0, 1, 0);
+
+scene.add(new THREE.AmbientLight(0x404060, 1.5));
+scene.add(new THREE.DirectionalLight(0xffffff, 2).translateX(3).translateY(5).translateZ(4));
+scene.add(new THREE.DirectionalLight(0x4488cc, 0.6).translateX(-3).translateY(2).translateZ(-2));
+scene.add(new THREE.GridHelper(6, 12, 0x333355, 0x222244));
+
+const clock = new THREE.Clock();
+
+// ── State ──
+let refData = null;        // { object, bones[], rootBone, totalHeight, minY, hipsY }
+let userModelObj = null;   // THREE.Object3D
+let userMeshes = [];       // THREE.Mesh[]
+let skinnedMesh = null;
+let skelHelper = null;
+let mixer = null;
+let currentAction = null;
+const animClips = {};
+
+const st = key => document.getElementById('st-' + key);
+
+// ══════════════════════════════════
+//  STEP 1: Load reference skeleton
+// ══════════════════════════════════
+new FBXLoader().load('T-Pose.fbx',
+  (object) => {
+    object.updateMatrixWorld(true);
+
+    // Deduplicate bones
+    const bones = [];
+    const seen = new Set();
+    object.traverse(c => {
+      if (c.isBone) {
+        const wp = new THREE.Vector3(); c.getWorldPosition(wp);
+        const key = c.name + '|' + wp.x.toFixed(1) + '|' + wp.y.toFixed(1) + '|' + wp.z.toFixed(1);
+        if (!seen.has(key)) { seen.add(key); bones.push(c); }
+      }
+    });
+
+    const rootBone = bones.find(b => !b.parent?.isBone);
+    let minY = Infinity, maxY = -Infinity;
+    bones.forEach(b => {
+      const wp = new THREE.Vector3(); b.getWorldPosition(wp);
+      if (wp.y < minY) minY = wp.y;
+      if (wp.y > maxY) maxY = wp.y;
+    });
+    const hipsWP = new THREE.Vector3(); rootBone.getWorldPosition(hipsWP);
+
+    refData = { object, bones, rootBone, totalHeight: maxY - minY, minY, maxY, hipsY: hipsWP.y };
+
+    st('ref').textContent = `1. Reference: OK (${bones.length} bones, ${refData.totalHeight.toFixed(0)}cm)`;
+    st('ref').className = 'st ok';
+    document.getElementById('btn-rig').disabled = true;
+    console.log('Reference loaded:', refData);
+  },
+  undefined,
+  (err) => { st('ref').textContent = '1. Reference: FAILED'; st('ref').className = 'st err'; }
+);
+
+// ══════════════════════════════════
+//  STEP 2: Upload user model
+// ══════════════════════════════════
+document.getElementById('btn-upload').addEventListener('click', () => document.getElementById('file-input').click());
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files.length) loadUserModel(e.target.files[0]);
+});
+
+function loadUserModel(file) {
+  st('model').textContent = '2. Model: loading...';
+  st('model').className = 'st working';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const object = new FBXLoader().parse(e.target.result);
+      if (userModelObj) scene.remove(userModelObj);
+      if (skinnedMesh) { scene.remove(skinnedMesh); skinnedMesh = null; }
+      if (skelHelper) { scene.remove(skelHelper); skelHelper = null; }
+
+      userModelObj = object;
+      userMeshes = [];
+
+      // Normalize
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const scale = 2.0 / Math.max(size.x, size.y, size.z);
+      object.scale.multiplyScalar(scale);
+      box.setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      object.position.sub(center);
+      box.setFromObject(object);
+      object.position.y -= box.min.y;
+
+      object.traverse(c => {
+        if (c.isMesh) {
+          userMeshes.push(c);
+          if (!c.geometry.attributes.normal) c.geometry.computeVertexNormals();
+          c.material = new THREE.MeshStandardMaterial({
+            color: 0x8888aa, roughness: 0.6, metalness: 0.1, side: THREE.DoubleSide,
+          });
+        }
+      });
+
+      scene.add(object);
+      box.setFromObject(object);
+      const h = box.getSize(new THREE.Vector3()).y;
+      controls.target.set(0, h * 0.45, 0);
+      camera.position.set(0, h * 0.5, h * 1.5);
+
+      st('model').textContent = `2. Model: OK (${file.name}, ${userMeshes.length} mesh)`;
+      st('model').className = 'st ok';
+      document.getElementById('btn-rig').disabled = !refData;
+    } catch (err) {
+      st('model').textContent = '2. Model: ERROR — ' + err.message;
+      st('model').className = 'st err';
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ══════════════════════════════════
+//  STEP 3 + 4: Fit + Skin
+// ══════════════════════════════════
+document.getElementById('btn-rig').addEventListener('click', () => {
+  if (!refData || !userModelObj) return;
+
+  st('fit').textContent = '3. Fit: processing...';
+  st('fit').className = 'st working';
+
+  setTimeout(() => {
+    try {
+      // ── 3. FIT: scale + position the reference skeleton ──
+      const modelBox = new THREE.Box3().setFromObject(userModelObj);
+      const modelH = modelBox.getSize(new THREE.Vector3()).y;
+
+      // Scale: model height / reference height
+      const fitScale = modelH / refData.totalHeight;
+
+      // Build world positions of ALL reference bones (scaled + repositioned)
+      const refFeetY = refData.minY * fitScale;
+      const yOffset = -refFeetY; // align feet to ground
+
+      const boneWorldPositions = {};  // boneName → Vector3
+      const boneWorldQuats = {};      // boneName → Quaternion
+
+      refData.object.updateMatrixWorld(true);
+
+      refData.bones.forEach(bone => {
+        const wp = new THREE.Vector3();
+        bone.getWorldPosition(wp);
+        // Apply scale and offset
+        wp.multiplyScalar(fitScale);
+        wp.y += yOffset;
+        boneWorldPositions[bone.name] = wp;
+
+        const wq = new THREE.Quaternion();
+        bone.getWorldQuaternion(wq);
+        boneWorldQuats[bone.name] = wq;
+      });
+
+      st('fit').textContent = `3. Fit: OK (scale=${fitScale.toFixed(5)})`;
+      st('fit').className = 'st ok';
+
+      // ── 4. SKIN: create SkinnedMesh ──
+      st('skin').textContent = '4. Skin: processing...';
+      st('skin').className = 'st working';
+
+      // Clone bone hierarchy from reference
+      const clonedRoot = refData.rootBone.clone(true);
+
+      // Scale the cloned skeleton
+      clonedRoot.position.multiplyScalar(fitScale);
+      clonedRoot.traverse(child => {
+        if (child.isBone && child !== clonedRoot) {
+          child.position.multiplyScalar(fitScale);
+        }
+      });
+      // Offset Y so feet touch ground
+      clonedRoot.position.y += yOffset;
+
+      clonedRoot.updateMatrixWorld(true);
+
+      // Collect cloned bones in consistent order
+      const clonedBones = [];
+      clonedRoot.traverse(c => { if (c.isBone) clonedBones.push(c); });
+
+      // Build world positions from cloned bones
+      const bwp = clonedBones.map(b => {
+        const v = new THREE.Vector3(); b.getWorldPosition(v); return v;
+      });
+
+      // Create skeleton
+      const skeleton = new THREE.Skeleton(clonedBones);
+
+      // Merge user model geometries
+      userModelObj.updateMatrixWorld(true);
+      const geos = [];
+      userModelObj.traverse(c => {
+        if (c.isMesh && c.geometry) {
+          const g = c.geometry.clone();
+          g.applyMatrix4(c.matrixWorld);
+          if (!g.attributes.normal) g.computeVertexNormals();
+          geos.push(g);
+        }
+      });
+
+      // Manual merge
+      let totalV = 0, totalI = 0;
+      for (const g of geos) { totalV += g.attributes.position.count; if (g.index) totalI += g.index.count; }
+      const posArr = new Float32Array(totalV * 3);
+      const nrmArr = new Float32Array(totalV * 3);
+      const idxArr = totalI > 0 ? new Uint32Array(totalI) : null;
+      let vo = 0, io = 0, vertOff = 0;
+      for (const g of geos) {
+        const p = g.attributes.position;
+        for (let i = 0; i < p.count * 3; i++) posArr[vo + i] = p.array[i];
+        if (g.attributes.normal) { const n = g.attributes.normal; for (let i = 0; i < n.count * 3; i++) nrmArr[vo + i] = n.array[i]; }
+        if (g.index && idxArr) { for (let i = 0; i < g.index.count; i++) idxArr[io + i] = g.index.array[i] + vertOff; io += g.index.count; }
+        vertOff += p.count; vo += p.count * 3;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nrmArr, 3));
+      if (idxArr) geo.setIndex(new THREE.BufferAttribute(idxArr, 1));
+
+      // Compute skin weights
+      const vCount = posArr.length / 3;
+      const si = new Uint16Array(vCount * 4);
+      const sw = new Float32Array(vCount * 4);
+      const tv = new THREE.Vector3();
+
+      for (let i = 0; i < vCount; i++) {
+        tv.set(posArr[i * 3], posArr[i * 3 + 1], posArr[i * 3 + 2]);
+        const ds = bwp.map((p, idx) => ({ idx, d: tv.distanceTo(p) }))
+                      .sort((a, b) => a.d - b.d)
+                      .slice(0, 4);
+        let tw = 0;
+        const ws = ds.map(d => { const w = 1 / Math.max(d.d, 0.01); tw += w; return w; });
+        for (let j = 0; j < 4; j++) {
+          si[i * 4 + j] = ds[j].idx;
+          sw[i * 4 + j] = ws[j] / tw;
+        }
+      }
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+      geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+
+      // Create SkinnedMesh
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x8888aa, roughness: 0.6, metalness: 0.1, side: THREE.DoubleSide,
+      });
+      skinnedMesh = new THREE.SkinnedMesh(geo, mat);
+      skinnedMesh.add(clonedRoot);
+      skinnedMesh.bind(skeleton);
+
+      // Remove original model, add skinned mesh
+      scene.remove(userModelObj);
+      scene.add(skinnedMesh);
+
+      // Skeleton helper
+      if (skelHelper) scene.remove(skelHelper);
+      skelHelper = new THREE.SkeletonHelper(skinnedMesh);
+      scene.add(skelHelper);
+
+      // Mixer
+      mixer = new THREE.AnimationMixer(skinnedMesh);
+
+      st('skin').textContent = `4. Skin: OK (${vCount} verts, ${clonedBones.length} bones)`;
+      st('skin').className = 'st ok';
+
+      // Show animation buttons
+      document.getElementById('anim-row').classList.add('visible');
+      st('anim').textContent = '5. Anim: select an animation';
+
+      console.log('Skinning complete. Bones:', clonedBones.map(b => b.name));
+
+    } catch (err) {
+      st('fit').textContent = '3/4. ERROR: ' + err.message;
+      st('fit').className = 'st err';
+      console.error(err);
+    }
+  }, 50);
+});
+
+// ══════════════════════════════════
+//  STEP 5: Animation
+// ══════════════════════════════════
+document.querySelectorAll('.btn.anim').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const name = btn.dataset.anim;
+    if (animClips[name]) { playAnim(name, btn); return; }
+
+    st('anim').textContent = `5. Anim: loading ${name}...`;
+    st('anim').className = 'st working';
+
+    const url = `animations/${encodeURIComponent(name)}.fbx`;
+    new FBXLoader().load(url,
+      (obj) => {
+        if (!obj.animations || !obj.animations.length) {
+          st('anim').textContent = '5. Anim: no animation data in file';
+          st('anim').className = 'st err';
+          return;
+        }
+        const srcClip = obj.animations[0];
+
+        // Retarget tracks
+        const tracks = [];
+        const skeletonBoneNames = new Set(
+          skinnedMesh.skeleton.bones.map(b => b.name)
+        );
+
+        for (const t of srcClip.tracks) {
+          const parts = t.name.split('.');
+          const prop = parts.pop();
+          const bonePath = parts.join('.');
+          const boneName = bonePath.split('/').pop();
+
+          if (skeletonBoneNames.has(boneName)) {
+            const nt = t.clone();
+            nt.name = boneName + '.' + prop;
+            tracks.push(nt);
+          }
+        }
+
+        console.log(`Animation "${name}": ${srcClip.tracks.length} src tracks → ${tracks.length} matched`);
+
+        const clip = tracks.length > 0
+          ? new THREE.AnimationClip(name, srcClip.duration, tracks)
+          : srcClip;
+        animClips[name] = clip;
+
+        st('anim').textContent = `5. Anim: loaded "${name}" (${tracks.length} tracks, ${srcClip.duration.toFixed(1)}s)`;
+        st('anim').className = 'st ok';
+
+        playAnim(name, btn);
+      },
+      undefined,
+      (err) => {
+        st('anim').textContent = `5. Anim: FAILED to load "${name}"`;
+        st('anim').className = 'st err';
+        console.error(err);
+      }
+    );
+  });
+});
+
+function playAnim(name, activeBtn) {
+  if (!mixer || !animClips[name]) return;
+  if (currentAction) currentAction.fadeOut(0.3);
+  const action = mixer.clipAction(animClips[name]);
+  action.reset().fadeIn(0.3).play();
+  currentAction = action;
+  document.querySelectorAll('.btn.anim').forEach(b => b.classList.remove('active'));
+  if (activeBtn) activeBtn.classList.add('active');
+}
+
+// ── Resize ──
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Render ──
+(function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  if (mixer) mixer.update(dt);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+</script>
+</body>
+</html>
