@@ -200,12 +200,41 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-camera.position.set(0, 1.2, 3);
 
-const controls = new OrbitControls(camera, renderer.domElement);
+// Dual camera system: Perspective for upload/animate, Orthographic for markers
+const perspCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+perspCamera.position.set(0, 1.2, 3);
+
+const orthoCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 1000);
+orthoCamera.position.set(0, 1.0, 5);
+
+let camera = perspCamera; // active camera
+
+let controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.target.set(0, 0.8, 0); controls.enabled = false;
+
+function switchCamera(type) {
+  const target = controls.target.clone();
+  controls.dispose();
+  if (type === 'ortho') {
+    camera = orthoCamera;
+  } else {
+    camera = perspCamera;
+  }
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.target.copy(target);
+  controls.enabled = true;
+  if (type === 'ortho') {
+    controls.enableRotate = false;   // Ortho: pan only, no rotate
+    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+  }
+  onResize();
+  controls.update();
+}
 
 scene.add(new THREE.AmbientLight(0x404060, 1.5));
 const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(3,5,4); scene.add(dl);
@@ -217,7 +246,16 @@ const pointer = new THREE.Vector2();
 
 function onResize() {
   const w = container.clientWidth, h = container.clientHeight;
-  camera.aspect = w/h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+  if (camera.isPerspectiveCamera) {
+    camera.aspect = w / h;
+  } else if (camera.isOrthographicCamera) {
+    const aspect = w / h;
+    const frustumH = camera.top - camera.bottom;  // current vertical frustum
+    camera.left = -frustumH * aspect / 2;
+    camera.right = frustumH * aspect / 2;
+  }
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
 }
 window.addEventListener('resize', onResize);
 
@@ -240,17 +278,31 @@ function goToStep(step){
   $('sidebar-markers').classList.remove('visible'); $('sidebar-anim').classList.remove('visible'); hideGuide();
   if(step==='upload'){$('screen-upload').classList.add('active');controls.enabled=false;setStatus('step','アップロード待ち')}
   if(step==='markers'){
-    $('sidebar-markers').classList.add('visible');controls.enabled=true;resetMarkers();
-    // Camera: face model from front (positive Z)
+    $('sidebar-markers').classList.add('visible');resetMarkers();
+    // Switch to Orthographic camera facing front
     const box=new THREE.Box3().setFromObject(state.model);
     const size=box.getSize(new THREE.Vector3());
     const center=box.getCenter(new THREE.Vector3());
     const h=size.y;
-    camera.position.set(0, center.y, h*1.4);
+    const padding = 1.2;  // frustum padding
+    orthoCamera.top = h * padding / 2;
+    orthoCamera.bottom = -h * padding / 2;
+    orthoCamera.position.set(0, center.y, h * 2);
+    switchCamera('ortho');
     controls.target.set(0, center.y, 0);
     controls.update();
     showGuide(MARKER_GUIDES[MARKER_ORDER[0]]);setStatus('step','マーカー配置')}
-  if(step==='animate'){$('sidebar-anim').classList.add('visible');controls.enabled=true;setStatus('step','アニメーション再生')}
+  if(step==='animate'){
+    $('sidebar-anim').classList.add('visible');
+    // Switch back to Perspective camera
+    const box=new THREE.Box3().setFromObject(state.skinnedMesh||state.model);
+    const center=box.getCenter(new THREE.Vector3());
+    const size=box.getSize(new THREE.Vector3());
+    perspCamera.position.set(0, center.y, size.y * 1.5);
+    switchCamera('persp');
+    controls.target.set(0, center.y, 0);
+    controls.update();
+    setStatus('step','アニメーション再生')}
   onResize();
 }
 
@@ -377,10 +429,12 @@ function generateSkeleton(){
   const spine2=new THREE.Vector3().lerpVectors(hips,chin,0.55);
   const neck=new THREE.Vector3().lerpVectors(hips,chin,0.80);
   const lE=m.elbows_l,rE=m.elbows_r,lW=m.wrists_l,rW=m.wrists_r,lK=m.knees_l,rK=m.knees_r;
-  // Shoulders: same height as neck, X offset toward arms
+  // Shoulders: neck height, X position between midline and elbow
+  // TUNABLE: 0.3 = shoulder width ratio (0=at neck, 1=at elbow)
+  const SHOULDER_RATIO = 0.3;
   const lArmTarget=lE||lW, rArmTarget=rE||rW;
-  const lSh=new THREE.Vector3(lArmTarget.x*0.15, neck.y, neck.z);
-  const rSh=new THREE.Vector3(rArmTarget.x*0.15, neck.y, neck.z);
+  const lSh=new THREE.Vector3(lArmTarget.x * SHOULDER_RATIO, neck.y, neck.z);
+  const rSh=new THREE.Vector3(rArmTarget.x * SHOULDER_RATIO, neck.y, neck.z);
   // UpperArm: between shoulder and elbow, closer to shoulder
   const lArm=new THREE.Vector3().lerpVectors(lSh,lArmTarget,0.4);
   const rArm=new THREE.Vector3().lerpVectors(rSh,rArmTarget,0.4);
