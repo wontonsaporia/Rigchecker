@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rigchecker — Skeleton Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e8e8f0; font-family: 'Noto Sans JP', sans-serif; overflow: hidden; }
+  #canvas { width: 100vw; height: 100vh; display: block; }
+  #info {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(0,0,0,0.7); padding: 12px 16px; border-radius: 8px;
+    font-size: 12px; line-height: 1.8; max-height: 90vh; overflow-y: auto;
+    font-family: 'Space Mono', monospace;
+  }
+  #info h3 { font-size: 13px; margin-bottom: 8px; color: #e94560; }
+  .bone-entry { color: #9999bb; }
+  .bone-entry.root { color: #4ecdc4; }
+  .bone-entry.spine { color: #45b7d1; }
+  .bone-entry.arm { color: #f9ca24; }
+  .bone-entry.leg { color: #a29bfe; }
+  .bone-entry.hand { color: #f0932b; }
+  .bone-pos { color: #666; font-size: 10px; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="info">
+  <h3>Loading T-Pose.fbx...</h3>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// ── Scene setup ──
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x1a1a2e);
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 10000);
+camera.position.set(0, 100, 300);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.target.set(0, 100, 0);
+
+scene.add(new THREE.AmbientLight(0x404060, 1.5));
+const dl = new THREE.DirectionalLight(0xffffff, 2);
+dl.position.set(100, 200, 150);
+scene.add(dl);
+
+// Grid (cm scale — Mixamo uses cm)
+scene.add(new THREE.GridHelper(400, 20, 0x333355, 0x222244));
+
+// Axis helper
+scene.add(new THREE.AxesHelper(50));
+
+const info = document.getElementById('info');
+
+// ── Load T-Pose.fbx ──
+const loader = new FBXLoader();
+loader.load('T-Pose.fbx',
+  (object) => {
+    console.log('T-Pose loaded:', object);
+
+    // Add to scene (this adds the bone hierarchy as Object3D)
+    scene.add(object);
+    object.updateMatrixWorld(true);
+
+    // Collect bones
+    const bones = [];
+    object.traverse(child => {
+      if (child.isBone) bones.push(child);
+    });
+
+    // Create SkeletonHelper for visualization
+    const rootBone = bones.find(b => !b.parent?.isBone);
+    if (rootBone) {
+      // Create a temporary Object3D to attach the helper
+      const skelHelper = new THREE.SkeletonHelper(rootBone);
+      skelHelper.material.linewidth = 2;
+      scene.add(skelHelper);
+    }
+
+    // Add spheres at each bone position for visibility
+    const boneColors = {
+      Hips: 0x4ecdc4, Spine: 0x45b7d1, Neck: 0x45b7d1, Head: 0x45b7d1,
+      Shoulder: 0xf9ca24, Arm: 0xf9ca24, ForeArm: 0xf9ca24,
+      Hand: 0xf0932b, Thumb: 0xf0932b, Index: 0xf0932b, Middle: 0xf0932b, Ring: 0xf0932b, Pinky: 0xf0932b,
+      UpLeg: 0xa29bfe, Leg: 0xa29bfe, Foot: 0xa29bfe, Toe: 0xa29bfe,
+    };
+
+    function getBoneColor(name) {
+      for (const [key, color] of Object.entries(boneColors)) {
+        if (name.includes(key)) return color;
+      }
+      return 0xe94560;
+    }
+
+    // Deduplicate bones (FBXLoader sometimes creates duplicates)
+    const uniqueBones = [];
+    const seen = new Set();
+    for (const b of bones) {
+      const wp = new THREE.Vector3();
+      b.getWorldPosition(wp);
+      const key = b.name + '_' + wp.x.toFixed(1) + '_' + wp.y.toFixed(1);
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueBones.push(b);
+      }
+    }
+
+    // Add spheres
+    uniqueBones.forEach(bone => {
+      const wp = new THREE.Vector3();
+      bone.getWorldPosition(wp);
+      const color = getBoneColor(bone.name);
+      const size = bone.name.includes('Hand') && !bone.name.endsWith('Hand') ? 1 : 2;
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(size, 8, 8),
+        new THREE.MeshBasicMaterial({ color, depthTest: false })
+      );
+      sphere.position.copy(wp);
+      sphere.renderOrder = 999;
+      scene.add(sphere);
+    });
+
+    // ── Build info panel ──
+    let html = `<h3>T-Pose.fbx — ${uniqueBones.length} bones</h3>`;
+
+    function categorize(name) {
+      if (name.includes('Hips')) return 'root';
+      if (name.includes('Spine') || name.includes('Neck') || name.includes('Head')) return 'spine';
+      if (name.includes('Shoulder') || name.includes('Arm') || name.includes('ForeArm')) return 'arm';
+      if (name.includes('Hand') || name.includes('Thumb') || name.includes('Index') || name.includes('Middle') || name.includes('Ring') || name.includes('Pinky')) return 'hand';
+      if (name.includes('Leg') || name.includes('Foot') || name.includes('Toe')) return 'leg';
+      return '';
+    }
+
+    function printHierarchy(bone, depth = 0) {
+      const wp = new THREE.Vector3();
+      bone.getWorldPosition(wp);
+      const indent = '&nbsp;'.repeat(depth * 3);
+      const cat = categorize(bone.name);
+      const shortName = bone.name.replace('mixamorig', '');
+      html += `<div class="bone-entry ${cat}">${indent}${shortName} <span class="bone-pos">(${wp.x.toFixed(1)}, ${wp.y.toFixed(1)}, ${wp.z.toFixed(1)})</span></div>`;
+
+      // Get unique bone children
+      const boneChildren = [];
+      const childSeen = new Set();
+      for (const child of bone.children) {
+        if (child.isBone && !childSeen.has(child.name)) {
+          childSeen.add(child.name);
+          boneChildren.push(child);
+        }
+      }
+      boneChildren.forEach(child => printHierarchy(child, depth + 1));
+    }
+
+    if (rootBone) {
+      printHierarchy(rootBone);
+    }
+
+    html += `<br><div style="color:#666">座標系: cm単位<br>Hips高さ: ${uniqueBones[0] ? (() => { const v = new THREE.Vector3(); uniqueBones[0].getWorldPosition(v); return v.y.toFixed(1); })() : '?'}cm</div>`;
+
+    info.innerHTML = html;
+
+    // Center camera on skeleton
+    camera.position.set(0, 100, 300);
+    controls.target.set(0, 100, 0);
+    controls.update();
+  },
+  (progress) => {
+    const pct = progress.total ? Math.round(progress.loaded / progress.total * 100) : '?';
+    info.innerHTML = `<h3>Loading... ${pct}%</h3>`;
+  },
+  (error) => {
+    info.innerHTML = `<h3 style="color:#ff6b6b">読み込み失敗</h3><div>${error.message}</div>`;
+    console.error(error);
+  }
+);
+
+// ── Resize ──
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Render loop ──
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+</script>
+</body>
+</html>

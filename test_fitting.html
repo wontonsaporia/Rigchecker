@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rigchecker — Fitting Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; color: #e8e8f0; font-family: 'Noto Sans JP', sans-serif; overflow: hidden; }
+  #canvas { width: 100vw; height: 100vh; display: block; }
+  #panel {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(0,0,0,0.75); padding: 14px 18px; border-radius: 8px;
+    font-size: 12px; line-height: 1.8; max-width: 320px;
+    font-family: 'Space Mono', monospace;
+  }
+  #panel h3 { font-size: 13px; margin-bottom: 8px; color: #e94560; }
+  .status { color: #9999bb; margin-bottom: 4px; }
+  .status.ok { color: #4ecdc4; }
+  .status.err { color: #ff6b6b; }
+  .upload-btn {
+    display: inline-block; margin-top: 10px; padding: 8px 20px;
+    background: #e94560; color: #fff; border: none; border-radius: 6px;
+    font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .upload-btn:hover { background: #ff6b6b; }
+  #file-input { display: none; }
+  .slider-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .slider-row label { font-size: 11px; color: #9999bb; min-width: 60px; }
+  .slider-row input[type="range"] { flex: 1; }
+  .slider-row .val { font-size: 11px; color: #4ecdc4; min-width: 40px; text-align: right; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="panel">
+  <h3>Fitting Test</h3>
+  <div class="status" id="st-ref">Reference: loading...</div>
+  <div class="status" id="st-model">Model: not loaded</div>
+  <div class="status" id="st-fit">Fit: —</div>
+  <button class="upload-btn" id="btn-upload">モデルをアップロード</button>
+  <input type="file" id="file-input" accept=".fbx,.glb">
+  <div class="slider-row" id="slider-scale" style="display:none">
+    <label>Scale</label>
+    <input type="range" id="s-scale" min="0.5" max="2.0" step="0.01" value="1.0">
+    <span class="val" id="v-scale">1.00</span>
+  </div>
+  <div class="slider-row" id="slider-y" style="display:none">
+    <label>Y offset</label>
+    <input type="range" id="s-yoff" min="-1.0" max="1.0" step="0.01" value="0.0">
+    <span class="val" id="v-yoff">0.00</span>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// ── FBX patch for Nomad ──
+const _origParse = FBXLoader.prototype.parse;
+FBXLoader.prototype.parse = function(buffer, path) {
+  try { return _origParse.call(this, buffer, path); }
+  catch(err) {
+    if (err.message && err.message.includes('MappingInformationType')) {
+      const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer || buffer);
+      const needle = [76,97,121,101,114,69,108,101,109,101,110,116,67,111,108,111,114];
+      for (let i = 0; i < bytes.length - needle.length; i++) {
+        let match = true;
+        for (let j = 0; j < needle.length; j++) { if (bytes[i+j] !== needle[j]) { match = false; break; } }
+        if (match) bytes[i + 12] = 88;
+      }
+      return _origParse.call(this, bytes.buffer, path);
+    }
+    throw err;
+  }
+};
+
+// ── Scene ──
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x1a1a2e);
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(0, 1, 3);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.target.set(0, 1, 0);
+
+scene.add(new THREE.AmbientLight(0x404060, 1.5));
+const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(3, 5, 4); scene.add(dl);
+scene.add(new THREE.DirectionalLight(0x4488cc, 0.6).translateX(-3).translateY(2).translateZ(-2));
+scene.add(new THREE.GridHelper(6, 12, 0x333355, 0x222244));
+
+// ── State ──
+let refSkeleton = null;   // { bones[], rootBone, object, hipsWorldY, totalHeight }
+let refGroup = null;       // THREE.Group containing the fitted skeleton visualization
+let userModel = null;
+let userModelHeight = 1;
+
+const stRef = document.getElementById('st-ref');
+const stModel = document.getElementById('st-model');
+const stFit = document.getElementById('st-fit');
+
+// ── Step 1: Load reference skeleton ──
+const loader = new FBXLoader();
+loader.load('T-Pose.fbx',
+  (object) => {
+    object.updateMatrixWorld(true);
+
+    // Extract bones
+    const bones = [];
+    const seen = new Set();
+    object.traverse(child => {
+      if (child.isBone) {
+        const wp = new THREE.Vector3();
+        child.getWorldPosition(wp);
+        const key = child.name + wp.x.toFixed(1) + wp.y.toFixed(1);
+        if (!seen.has(key)) {
+          seen.add(key);
+          bones.push(child);
+        }
+      }
+    });
+
+    const rootBone = bones.find(b => !b.parent?.isBone);
+
+    // Measure reference skeleton size (in cm)
+    let minY = Infinity, maxY = -Infinity;
+    bones.forEach(b => {
+      const wp = new THREE.Vector3();
+      b.getWorldPosition(wp);
+      if (wp.y < minY) minY = wp.y;
+      if (wp.y > maxY) maxY = wp.y;
+    });
+
+    const hipsWP = new THREE.Vector3();
+    rootBone.getWorldPosition(hipsWP);
+
+    refSkeleton = {
+      object,
+      bones,
+      rootBone,
+      hipsWorldY: hipsWP.y,
+      totalHeight: maxY - minY,
+      minY,
+      maxY,
+    };
+
+    stRef.textContent = `Reference: ${bones.length} bones, height ${refSkeleton.totalHeight.toFixed(1)}cm`;
+    stRef.className = 'status ok';
+
+    console.log('Reference skeleton loaded:', refSkeleton);
+  },
+  undefined,
+  (err) => {
+    stRef.textContent = 'Reference: FAILED — ' + err.message;
+    stRef.className = 'status err';
+  }
+);
+
+// ── Step 2: Upload user model ──
+document.getElementById('btn-upload').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+document.getElementById('file-input').addEventListener('change', (e) => {
+  if (e.target.files.length) loadUserModel(e.target.files[0]);
+});
+
+function loadUserModel(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  stModel.textContent = 'Model: loading...';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let object;
+      if (ext === 'fbx') {
+        object = new FBXLoader().parse(e.target.result);
+      } else {
+        stModel.textContent = 'Model: FBX only for now';
+        stModel.className = 'status err';
+        return;
+      }
+
+      if (userModel) scene.remove(userModel);
+
+      userModel = object;
+
+      // Normalize to ~2 units tall, feet at y=0
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const scale = 2.0 / Math.max(size.x, size.y, size.z);
+      object.scale.multiplyScalar(scale);
+      box.setFromObject(object);
+      box.getCenter(center);
+      object.position.sub(center);
+      box.setFromObject(object);
+      object.position.y -= box.min.y;
+
+      // Semi-transparent material so skeleton is visible through it
+      object.traverse(child => {
+        if (child.isMesh) {
+          if (!child.geometry.attributes.normal) child.geometry.computeVertexNormals();
+          child.material = new THREE.MeshStandardMaterial({
+            color: 0x8888aa, roughness: 0.6, metalness: 0.1,
+            side: THREE.DoubleSide, transparent: true, opacity: 0.5,
+          });
+        }
+      });
+
+      scene.add(object);
+
+      // Measure model height
+      box.setFromObject(object);
+      const modelSize = box.getSize(new THREE.Vector3());
+      userModelHeight = modelSize.y;
+
+      stModel.textContent = `Model: ${file.name} — height ${userModelHeight.toFixed(2)} units`;
+      stModel.className = 'status ok';
+
+      // Auto-fit skeleton
+      if (refSkeleton) fitSkeleton(1.0, 0.0);
+
+      // Show sliders
+      document.getElementById('slider-scale').style.display = 'flex';
+      document.getElementById('slider-y').style.display = 'flex';
+
+      // Camera
+      controls.target.set(0, userModelHeight * 0.45, 0);
+      camera.position.set(0, userModelHeight * 0.5, userModelHeight * 1.5);
+      controls.update();
+
+    } catch (err) {
+      stModel.textContent = 'Model: ERROR — ' + err.message;
+      stModel.className = 'status err';
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Step 3: Fit skeleton to model ──
+function fitSkeleton(scaleMultiplier, yOffset) {
+  if (!refSkeleton || !userModel) return;
+
+  // Remove previous fitted skeleton
+  if (refGroup) scene.remove(refGroup);
+
+  // Calculate scale: model height (in scene units) / reference height (in cm)
+  // Reference is in cm, model is normalized to ~2 units
+  const baseScale = userModelHeight / refSkeleton.totalHeight;
+  const finalScale = baseScale * scaleMultiplier;
+
+  // Clone the reference object
+  const fitted = refSkeleton.object.clone(true);
+  fitted.scale.set(finalScale, finalScale, finalScale);
+
+  // Position: align Hips Y with model center, feet at ground
+  // Reference Hips is at hipsWorldY cm from origin
+  // After scaling, Hips will be at hipsWorldY * finalScale
+  // Reference minY (feet) after scaling = refSkeleton.minY * finalScale
+  const feetY = refSkeleton.minY * finalScale;
+  fitted.position.set(0, -feetY + yOffset, 0);
+
+  fitted.updateMatrixWorld(true);
+
+  // Create visualization group
+  refGroup = new THREE.Group();
+  refGroup.add(fitted);
+
+  // Add SkeletonHelper
+  const rootBone = [];
+  fitted.traverse(child => {
+    if (child.isBone && !child.parent?.isBone) rootBone.push(child);
+  });
+  if (rootBone.length > 0) {
+    const helper = new THREE.SkeletonHelper(rootBone[0]);
+    helper.material.linewidth = 2;
+    refGroup.add(helper);
+  }
+
+  // Add bone position spheres
+  fitted.traverse(child => {
+    if (child.isBone) {
+      const wp = new THREE.Vector3();
+      child.getWorldPosition(wp);
+      const isMainBone = !child.name.includes('Hand') ||
+                         child.name.endsWith('Hand') ||
+                         child.name.endsWith('Shoulder');
+      if (isMainBone || child.name.includes('Thumb1') || child.name.includes('Index1')) {
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(isMainBone ? 0.02 : 0.01, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xe94560, depthTest: false })
+        );
+        sphere.position.copy(wp);
+        sphere.renderOrder = 999;
+        refGroup.add(sphere);
+      }
+    }
+  });
+
+  scene.add(refGroup);
+
+  // Report
+  const hipsWP = new THREE.Vector3();
+  rootBone[0]?.getWorldPosition(hipsWP);
+  stFit.textContent = `Fit: scale=${finalScale.toFixed(4)}, Hips=(${hipsWP.x.toFixed(2)}, ${hipsWP.y.toFixed(2)}, ${hipsWP.z.toFixed(2)})`;
+  stFit.className = 'status ok';
+}
+
+// ── Sliders ──
+document.getElementById('s-scale').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  document.getElementById('v-scale').textContent = v.toFixed(2);
+  fitSkeleton(v, parseFloat(document.getElementById('s-yoff').value));
+});
+document.getElementById('s-yoff').addEventListener('input', (e) => {
+  const v = parseFloat(e.target.value);
+  document.getElementById('v-yoff').textContent = v.toFixed(2);
+  fitSkeleton(parseFloat(document.getElementById('s-scale').value), v);
+});
+
+// ── Resize ──
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── Render ──
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+</script>
+</body>
+</html>
