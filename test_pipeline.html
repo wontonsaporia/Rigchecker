@@ -116,6 +116,8 @@ let skinnedMesh = null;
 let skelHelper = null;
 let mixer = null;
 let currentAction = null;
+let fitScale = 1;  // stored for animation position scaling
+let fitYOffset = 0; // stored for Hips position correction
 const animClips = {};
 
 const st = key => document.getElementById('st-' + key);
@@ -236,11 +238,12 @@ document.getElementById('btn-rig').addEventListener('click', () => {
       const modelH = modelBox.getSize(new THREE.Vector3()).y;
 
       // Scale: model height / reference height
-      const fitScale = modelH / refData.totalHeight;
+      fitScale = modelH / refData.totalHeight;
 
       // Build world positions of ALL reference bones (scaled + repositioned)
       const refFeetY = refData.minY * fitScale;
       const yOffset = -refFeetY; // align feet to ground
+      fitYOffset = yOffset;
 
       const boneWorldPositions = {};  // boneName → Vector3
       const boneWorldQuats = {};      // boneName → Quaternion
@@ -325,7 +328,26 @@ document.getElementById('btn-rig').addEventListener('click', () => {
       geo.setAttribute('normal', new THREE.BufferAttribute(nrmArr, 3));
       if (idxArr) geo.setIndex(new THREE.BufferAttribute(idxArr, 1));
 
-      // Compute skin weights
+      // Compute skin weights — using MAIN BONES ONLY (exclude fingers, end bones)
+      const SKIN_BONE_NAMES = new Set([
+        'mixamorigHips',
+        'mixamorigSpine', 'mixamorigSpine1', 'mixamorigSpine2',
+        'mixamorigNeck', 'mixamorigHead',
+        'mixamorigLeftShoulder', 'mixamorigLeftArm', 'mixamorigLeftForeArm', 'mixamorigLeftHand',
+        'mixamorigRightShoulder', 'mixamorigRightArm', 'mixamorigRightForeArm', 'mixamorigRightHand',
+        'mixamorigLeftUpLeg', 'mixamorigLeftLeg', 'mixamorigLeftFoot', 'mixamorigLeftToeBase',
+        'mixamorigRightUpLeg', 'mixamorigRightLeg', 'mixamorigRightFoot', 'mixamorigRightToeBase',
+      ]);
+
+      // Build filtered list: { skeletonIndex, worldPosition } for main bones only
+      const skinBones = [];
+      clonedBones.forEach((b, idx) => {
+        if (SKIN_BONE_NAMES.has(b.name)) {
+          skinBones.push({ idx, pos: bwp[idx] });
+        }
+      });
+      console.log(`Skinning with ${skinBones.length} main bones (${clonedBones.length} total in skeleton)`);
+
       const vCount = posArr.length / 3;
       const si = new Uint16Array(vCount * 4);
       const sw = new Float32Array(vCount * 4);
@@ -333,9 +355,10 @@ document.getElementById('btn-rig').addEventListener('click', () => {
 
       for (let i = 0; i < vCount; i++) {
         tv.set(posArr[i * 3], posArr[i * 3 + 1], posArr[i * 3 + 2]);
-        const ds = bwp.map((p, idx) => ({ idx, d: tv.distanceTo(p) }))
-                      .sort((a, b) => a.d - b.d)
-                      .slice(0, 4);
+        // Distance to main bones only
+        const ds = skinBones.map(sb => ({ idx: sb.idx, d: tv.distanceTo(sb.pos) }))
+                            .sort((a, b) => a.d - b.d)
+                            .slice(0, 4);
         let tw = 0;
         const ws = ds.map(d => { const w = 1 / Math.max(d.d, 0.01); tw += w; return w; });
         for (let j = 0; j < 4; j++) {
@@ -419,6 +442,21 @@ document.querySelectorAll('.btn.anim').forEach(btn => {
           if (skeletonBoneNames.has(boneName)) {
             const nt = t.clone();
             nt.name = boneName + '.' + prop;
+
+            // Scale position tracks by fitScale (Mixamo uses cm, our model is normalized)
+            if (prop === 'position') {
+              const vals = nt.values;
+              for (let i = 0; i < vals.length; i++) {
+                vals[i] *= fitScale;
+              }
+              // For Hips: also add Y offset so feet stay on ground
+              if (boneName === 'mixamorigHips') {
+                for (let i = 1; i < vals.length; i += 3) {
+                  vals[i] += fitYOffset;
+                }
+              }
+            }
+
             tracks.push(nt);
           }
         }
