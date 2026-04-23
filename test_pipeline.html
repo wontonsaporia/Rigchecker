@@ -58,6 +58,7 @@
   </div>
   <div class="separator"></div>
   <div class="st" id="st-debug">Debug: —</div>
+  <button class="btn" id="btn-pause" style="display:none;background:#2a5a2a">⏸ 一時停止</button>
   <button class="btn" id="btn-normal" style="display:none;background:#444">法線カラー切替</button>
   <button class="btn" id="btn-wireframe" style="display:none;background:#444">ワイヤーフレーム切替</button>
 </div>
@@ -349,6 +350,17 @@ document.getElementById('btn-rig').addEventListener('click', () => {
         'mixamorigRightShoulder', 'mixamorigRightArm', 'mixamorigRightForeArm', 'mixamorigRightHand',
         'mixamorigLeftUpLeg', 'mixamorigLeftLeg', 'mixamorigLeftFoot', 'mixamorigLeftToeBase',
         'mixamorigRightUpLeg', 'mixamorigRightLeg', 'mixamorigRightFoot', 'mixamorigRightToeBase',
+        // Fingers
+        'mixamorigLeftHandThumb1','mixamorigLeftHandThumb2','mixamorigLeftHandThumb3',
+        'mixamorigLeftHandIndex1','mixamorigLeftHandIndex2','mixamorigLeftHandIndex3',
+        'mixamorigLeftHandMiddle1','mixamorigLeftHandMiddle2','mixamorigLeftHandMiddle3',
+        'mixamorigLeftHandRing1','mixamorigLeftHandRing2','mixamorigLeftHandRing3',
+        'mixamorigLeftHandPinky1','mixamorigLeftHandPinky2','mixamorigLeftHandPinky3',
+        'mixamorigRightHandThumb1','mixamorigRightHandThumb2','mixamorigRightHandThumb3',
+        'mixamorigRightHandIndex1','mixamorigRightHandIndex2','mixamorigRightHandIndex3',
+        'mixamorigRightHandMiddle1','mixamorigRightHandMiddle2','mixamorigRightHandMiddle3',
+        'mixamorigRightHandRing1','mixamorigRightHandRing2','mixamorigRightHandRing3',
+        'mixamorigRightHandPinky1','mixamorigRightHandPinky2','mixamorigRightHandPinky3',
       ]);
 
       // Define each bone's segment endpoint (bone → child)
@@ -358,15 +370,15 @@ document.getElementById('btn-rig').addEventListener('click', () => {
         mixamorigSpine1: 'mixamorigSpine2',
         mixamorigSpine2: 'mixamorigNeck',
         mixamorigNeck: 'mixamorigHead',
-        mixamorigHead: 'mixamorigHeadTop_End',  // HeadTop_End exists in skeleton, just not in skin set
+        mixamorigHead: 'mixamorigHeadTop_End',
         mixamorigLeftShoulder: 'mixamorigLeftArm',
         mixamorigLeftArm: 'mixamorigLeftForeArm',
         mixamorigLeftForeArm: 'mixamorigLeftHand',
-        mixamorigLeftHand: null,  // leaf
+        mixamorigLeftHand: 'mixamorigLeftHandMiddle1',
         mixamorigRightShoulder: 'mixamorigRightArm',
         mixamorigRightArm: 'mixamorigRightForeArm',
         mixamorigRightForeArm: 'mixamorigRightHand',
-        mixamorigRightHand: null,
+        mixamorigRightHand: 'mixamorigRightHandMiddle1',
         mixamorigLeftUpLeg: 'mixamorigLeftLeg',
         mixamorigLeftLeg: 'mixamorigLeftFoot',
         mixamorigLeftFoot: 'mixamorigLeftToeBase',
@@ -375,6 +387,18 @@ document.getElementById('btn-rig').addEventListener('click', () => {
         mixamorigRightLeg: 'mixamorigRightFoot',
         mixamorigRightFoot: 'mixamorigRightToeBase',
         mixamorigRightToeBase: null,
+        // Left fingers
+        mixamorigLeftHandThumb1:'mixamorigLeftHandThumb2', mixamorigLeftHandThumb2:'mixamorigLeftHandThumb3', mixamorigLeftHandThumb3:null,
+        mixamorigLeftHandIndex1:'mixamorigLeftHandIndex2', mixamorigLeftHandIndex2:'mixamorigLeftHandIndex3', mixamorigLeftHandIndex3:null,
+        mixamorigLeftHandMiddle1:'mixamorigLeftHandMiddle2', mixamorigLeftHandMiddle2:'mixamorigLeftHandMiddle3', mixamorigLeftHandMiddle3:null,
+        mixamorigLeftHandRing1:'mixamorigLeftHandRing2', mixamorigLeftHandRing2:'mixamorigLeftHandRing3', mixamorigLeftHandRing3:null,
+        mixamorigLeftHandPinky1:'mixamorigLeftHandPinky2', mixamorigLeftHandPinky2:'mixamorigLeftHandPinky3', mixamorigLeftHandPinky3:null,
+        // Right fingers
+        mixamorigRightHandThumb1:'mixamorigRightHandThumb2', mixamorigRightHandThumb2:'mixamorigRightHandThumb3', mixamorigRightHandThumb3:null,
+        mixamorigRightHandIndex1:'mixamorigRightHandIndex2', mixamorigRightHandIndex2:'mixamorigRightHandIndex3', mixamorigRightHandIndex3:null,
+        mixamorigRightHandMiddle1:'mixamorigRightHandMiddle2', mixamorigRightHandMiddle2:'mixamorigRightHandMiddle3', mixamorigRightHandMiddle3:null,
+        mixamorigRightHandRing1:'mixamorigRightHandRing2', mixamorigRightHandRing2:'mixamorigRightHandRing3', mixamorigRightHandRing3:null,
+        mixamorigRightHandPinky1:'mixamorigRightHandPinky2', mixamorigRightHandPinky2:'mixamorigRightHandPinky3', mixamorigRightHandPinky3:null,
       };
 
       // Build bone name → world position map (for all bones, not just skin set)
@@ -432,11 +456,32 @@ document.getElementById('btn-rig').addEventListener('click', () => {
           d: distToSegment(tv, sb.start, sb.end),
         })).sort((a, b) => a.d - b.d).slice(0, 4);
 
+        // TUNABLE PARAMETERS
+        const POWER = 1.5;              // falloff sharpness (1=linear, 2=square, 1.5=balanced)
+        const MIN_NEAREST_WEIGHT = 0.6; // nearest bone always gets at least this much
+        const MIN_DIST = 0.005;
+
+        // Compute raw weights with power falloff
         let tw = 0;
-        const ws = ds.map(d => { const w = 1 / Math.max(d.d, 0.005); tw += w; return w; });
+        const ws = ds.map(d => { const w = 1 / Math.pow(Math.max(d.d, MIN_DIST), POWER); tw += w; return w; });
+        // Normalize
+        for (let j = 0; j < 4; j++) ws[j] /= tw;
+
+        // Clamp: ensure nearest bone gets at least MIN_NEAREST_WEIGHT
+        if (ws[0] < MIN_NEAREST_WEIGHT) {
+          const deficit = MIN_NEAREST_WEIGHT - ws[0];
+          ws[0] = MIN_NEAREST_WEIGHT;
+          // Redistribute deficit proportionally from other bones
+          const otherTotal = ws[1] + ws[2] + ws[3];
+          if (otherTotal > 0.001) {
+            const scale = (1 - MIN_NEAREST_WEIGHT) / otherTotal;
+            ws[1] *= scale; ws[2] *= scale; ws[3] *= scale;
+          }
+        }
+
         for (let j = 0; j < 4; j++) {
           si[i * 4 + j] = ds[j].idx;
-          sw[i * 4 + j] = ws[j] / tw;
+          sw[i * 4 + j] = ws[j];
         }
       }
       geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
@@ -534,18 +579,14 @@ document.querySelectorAll('.btn.anim').forEach(btn => {
             // Rotation tracks: use as-is (this is the core animation data)
             tracks.push(nt);
           } else if (prop === 'position' && boneName === 'mixamorigHips') {
-            // Hips position: scale to match our skeleton
-            // Animation values are in cm (Mixamo space), our skeleton is scaled by fitScale
-            // The bind pose Hips.position.y already includes fitScale + yOffset
-            // So we scale animation values the same way
+            // Hips position: Y is free (up/down motion), XZ locked (no drift)
             const vals = nt.values;
-            const refHipsY = refData.hipsY; // original Hips Y in cm (~99.8)
+            const bindX = bindHipsPos ? bindHipsPos.x : 0;
+            const bindZ = bindHipsPos ? bindHipsPos.z : 0;
             for (let i = 0; i < vals.length; i += 3) {
-              // Scale XZ by fitScale
-              vals[i]     *= fitScale;       // X
-              vals[i + 2] *= fitScale;       // Z
-              // Y: scale and apply same offset as bind pose
-              vals[i + 1] = vals[i + 1] * fitScale + fitYOffset;
+              vals[i]     = bindX;                                  // X: locked
+              vals[i + 1] = vals[i + 1] * fitScale + fitYOffset;   // Y: free (scaled)
+              vals[i + 2] = bindZ;                                  // Z: locked
             }
             tracks.push(nt);
           }
@@ -581,9 +622,24 @@ function playAnim(name, activeBtn) {
   const action = mixer.clipAction(animClips[name]);
   action.reset().fadeIn(0.3).play();
   currentAction = action;
+  animPaused = false;
   document.querySelectorAll('.btn.anim').forEach(b => b.classList.remove('active'));
   if (activeBtn) activeBtn.classList.add('active');
+  const pauseBtn = document.getElementById('btn-pause');
+  pauseBtn.style.display = 'inline-block';
+  pauseBtn.textContent = '⏸ 一時停止';
+  pauseBtn.style.background = '#2a5a2a';
 }
+
+let animPaused = false;
+document.getElementById('btn-pause').addEventListener('click', () => {
+  if (!currentAction) return;
+  animPaused = !animPaused;
+  currentAction.paused = animPaused;
+  const btn = document.getElementById('btn-pause');
+  btn.textContent = animPaused ? '▶ 再生' : '⏸ 一時停止';
+  btn.style.background = animPaused ? '#5a2a2a' : '#2a5a2a';
+});
 
 // ── Debug tools ──
 let normalMatActive = false;
