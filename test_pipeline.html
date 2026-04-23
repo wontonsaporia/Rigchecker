@@ -56,6 +56,10 @@
     <button class="btn anim" data-anim="Standing Jump">Jump</button>
     <button class="btn anim" data-anim="Waving">Wave</button>
   </div>
+  <div class="separator"></div>
+  <div class="st" id="st-debug">Debug: —</div>
+  <button class="btn" id="btn-normal" style="display:none;background:#444">法線カラー切替</button>
+  <button class="btn" id="btn-wireframe" style="display:none;background:#444">ワイヤーフレーム切替</button>
 </div>
 
 <script type="importmap">
@@ -105,6 +109,7 @@ scene.add(new THREE.AmbientLight(0x404060, 1.5));
 scene.add(new THREE.DirectionalLight(0xffffff, 2).translateX(3).translateY(5).translateZ(4));
 scene.add(new THREE.DirectionalLight(0x4488cc, 0.6).translateX(-3).translateY(2).translateZ(-2));
 scene.add(new THREE.GridHelper(6, 12, 0x333355, 0x222244));
+scene.add(new THREE.AxesHelper(1));  // R=X, G=Y, B=Z
 
 const clock = new THREE.Clock();
 
@@ -283,6 +288,10 @@ document.getElementById('btn-rig').addEventListener('click', () => {
       // Offset Y so feet touch ground
       clonedRoot.position.y += yOffset;
 
+      // Fix ③: Center skeleton Z on model's bounding box center Z
+      const modelCenter = modelBox.getCenter(new THREE.Vector3());
+      clonedRoot.position.z = modelCenter.z;
+
       clonedRoot.updateMatrixWorld(true);
 
       // Collect cloned bones in consistent order
@@ -328,7 +337,10 @@ document.getElementById('btn-rig').addEventListener('click', () => {
       geo.setAttribute('normal', new THREE.BufferAttribute(nrmArr, 3));
       if (idxArr) geo.setIndex(new THREE.BufferAttribute(idxArr, 1));
 
-      // Compute skin weights — using MAIN BONES ONLY (exclude fingers, end bones)
+      // Compute skin weights — BONE SEGMENT DISTANCE method
+      // Instead of distance to bone POINT, use distance to bone LINE SEGMENT
+      // This creates cylindrical influence regions along each bone
+
       const SKIN_BONE_NAMES = new Set([
         'mixamorigHips',
         'mixamorigSpine', 'mixamorigSpine1', 'mixamorigSpine2',
@@ -339,14 +351,73 @@ document.getElementById('btn-rig').addEventListener('click', () => {
         'mixamorigRightUpLeg', 'mixamorigRightLeg', 'mixamorigRightFoot', 'mixamorigRightToeBase',
       ]);
 
-      // Build filtered list: { skeletonIndex, worldPosition } for main bones only
+      // Define each bone's segment endpoint (bone → child)
+      const BONE_CHILD_MAP = {
+        mixamorigHips: 'mixamorigSpine',
+        mixamorigSpine: 'mixamorigSpine1',
+        mixamorigSpine1: 'mixamorigSpine2',
+        mixamorigSpine2: 'mixamorigNeck',
+        mixamorigNeck: 'mixamorigHead',
+        mixamorigHead: 'mixamorigHeadTop_End',  // HeadTop_End exists in skeleton, just not in skin set
+        mixamorigLeftShoulder: 'mixamorigLeftArm',
+        mixamorigLeftArm: 'mixamorigLeftForeArm',
+        mixamorigLeftForeArm: 'mixamorigLeftHand',
+        mixamorigLeftHand: null,  // leaf
+        mixamorigRightShoulder: 'mixamorigRightArm',
+        mixamorigRightArm: 'mixamorigRightForeArm',
+        mixamorigRightForeArm: 'mixamorigRightHand',
+        mixamorigRightHand: null,
+        mixamorigLeftUpLeg: 'mixamorigLeftLeg',
+        mixamorigLeftLeg: 'mixamorigLeftFoot',
+        mixamorigLeftFoot: 'mixamorigLeftToeBase',
+        mixamorigLeftToeBase: null,
+        mixamorigRightUpLeg: 'mixamorigRightLeg',
+        mixamorigRightLeg: 'mixamorigRightFoot',
+        mixamorigRightFoot: 'mixamorigRightToeBase',
+        mixamorigRightToeBase: null,
+      };
+
+      // Build bone name → world position map (for all bones, not just skin set)
+      const allBoneWP = {};
+      clonedBones.forEach((b, idx) => { allBoneWP[b.name] = bwp[idx]; });
+
+      // Build skin bone list with segments
       const skinBones = [];
       clonedBones.forEach((b, idx) => {
-        if (SKIN_BONE_NAMES.has(b.name)) {
-          skinBones.push({ idx, pos: bwp[idx] });
+        if (!SKIN_BONE_NAMES.has(b.name)) return;
+        const start = bwp[idx];
+        const childName = BONE_CHILD_MAP[b.name];
+        let end;
+        if (childName && allBoneWP[childName]) {
+          end = allBoneWP[childName];
+        } else {
+          // Leaf bone: extend segment slightly in the direction from parent
+          const parent = b.parent;
+          if (parent && parent.isBone) {
+            const parentWP = new THREE.Vector3(); parent.getWorldPosition(parentWP);
+            const dir = start.clone().sub(parentWP).normalize();
+            end = start.clone().add(dir.multiplyScalar(0.05));
+          } else {
+            end = start.clone();
+          }
         }
+        skinBones.push({ idx, start, end, name: b.name });
       });
-      console.log(`Skinning with ${skinBones.length} main bones (${clonedBones.length} total in skeleton)`);
+      console.log(`Skinning with ${skinBones.length} bone segments`);
+
+      // Distance from point to line segment
+      const _ab = new THREE.Vector3();
+      const _ap = new THREE.Vector3();
+      const _closest = new THREE.Vector3();
+      function distToSegment(point, segStart, segEnd) {
+        _ab.copy(segEnd).sub(segStart);
+        _ap.copy(point).sub(segStart);
+        const abLen2 = _ab.dot(_ab);
+        if (abLen2 < 0.00001) return point.distanceTo(segStart); // degenerate segment
+        const t = Math.max(0, Math.min(1, _ap.dot(_ab) / abLen2));
+        _closest.copy(segStart).addScaledVector(_ab, t);
+        return point.distanceTo(_closest);
+      }
 
       const vCount = posArr.length / 3;
       const si = new Uint16Array(vCount * 4);
@@ -355,12 +426,14 @@ document.getElementById('btn-rig').addEventListener('click', () => {
 
       for (let i = 0; i < vCount; i++) {
         tv.set(posArr[i * 3], posArr[i * 3 + 1], posArr[i * 3 + 2]);
-        // Distance to main bones only
-        const ds = skinBones.map(sb => ({ idx: sb.idx, d: tv.distanceTo(sb.pos) }))
-                            .sort((a, b) => a.d - b.d)
-                            .slice(0, 4);
+        // Distance to each bone SEGMENT
+        const ds = skinBones.map(sb => ({
+          idx: sb.idx,
+          d: distToSegment(tv, sb.start, sb.end),
+        })).sort((a, b) => a.d - b.d).slice(0, 4);
+
         let tw = 0;
-        const ws = ds.map(d => { const w = 1 / Math.max(d.d, 0.01); tw += w; return w; });
+        const ws = ds.map(d => { const w = 1 / Math.max(d.d, 0.005); tw += w; return w; });
         for (let j = 0; j < 4; j++) {
           si[i * 4 + j] = ds[j].idx;
           sw[i * 4 + j] = ws[j] / tw;
@@ -392,11 +465,20 @@ document.getElementById('btn-rig').addEventListener('click', () => {
       st('skin').textContent = `4. Skin: OK (${vCount} verts, ${clonedBones.length} bones)`;
       st('skin').className = 'st ok';
 
-      // Show animation buttons
+      // Show animation buttons and debug tools
       document.getElementById('anim-row').classList.add('visible');
+      document.getElementById('btn-normal').style.display = 'inline-block';
+      document.getElementById('btn-wireframe').style.display = 'inline-block';
       st('anim').textContent = '5. Anim: select an animation';
 
-      console.log('Skinning complete. Bones:', clonedBones.map(b => b.name));
+      // Log bone world positions for debug
+      const hipsWP = new THREE.Vector3();
+      clonedRoot.getWorldPosition(hipsWP);
+      st('debug').textContent = `Debug: Hips=(${hipsWP.x.toFixed(3)}, ${hipsWP.y.toFixed(3)}, ${hipsWP.z.toFixed(3)})`;
+      console.log('Skinning complete. Bones:', clonedBones.map(b => {
+        const wp = new THREE.Vector3(); b.getWorldPosition(wp);
+        return `${b.name}: (${wp.x.toFixed(3)}, ${wp.y.toFixed(3)}, ${wp.z.toFixed(3)})`;
+      }));
 
     } catch (err) {
       st('fit').textContent = '3/4. ERROR: ' + err.message;
@@ -433,32 +515,42 @@ document.querySelectorAll('.btn.anim').forEach(btn => {
           skinnedMesh.skeleton.bones.map(b => b.name)
         );
 
+        // Get the bind pose Hips position for reference
+        const bindHipsPos = skinnedMesh.skeleton.bones.find(b => b.name === 'mixamorigHips')?.position.clone();
+        console.log('Bind Hips position:', bindHipsPos);
+
         for (const t of srcClip.tracks) {
           const parts = t.name.split('.');
           const prop = parts.pop();
           const bonePath = parts.join('.');
           const boneName = bonePath.split('/').pop();
 
-          if (skeletonBoneNames.has(boneName)) {
-            const nt = t.clone();
-            nt.name = boneName + '.' + prop;
+          if (!skeletonBoneNames.has(boneName)) continue;
 
-            // Scale position tracks by fitScale (Mixamo uses cm, our model is normalized)
-            if (prop === 'position') {
-              const vals = nt.values;
-              for (let i = 0; i < vals.length; i++) {
-                vals[i] *= fitScale;
-              }
-              // For Hips: also add Y offset so feet stay on ground
-              if (boneName === 'mixamorigHips') {
-                for (let i = 1; i < vals.length; i += 3) {
-                  vals[i] += fitYOffset;
-                }
-              }
+          const nt = t.clone();
+          nt.name = boneName + '.' + prop;
+
+          if (prop === 'quaternion') {
+            // Rotation tracks: use as-is (this is the core animation data)
+            tracks.push(nt);
+          } else if (prop === 'position' && boneName === 'mixamorigHips') {
+            // Hips position: scale to match our skeleton
+            // Animation values are in cm (Mixamo space), our skeleton is scaled by fitScale
+            // The bind pose Hips.position.y already includes fitScale + yOffset
+            // So we scale animation values the same way
+            const vals = nt.values;
+            const refHipsY = refData.hipsY; // original Hips Y in cm (~99.8)
+            for (let i = 0; i < vals.length; i += 3) {
+              // Scale XZ by fitScale
+              vals[i]     *= fitScale;       // X
+              vals[i + 2] *= fitScale;       // Z
+              // Y: scale and apply same offset as bind pose
+              vals[i + 1] = vals[i + 1] * fitScale + fitYOffset;
             }
-
             tracks.push(nt);
           }
+          // Skip position tracks for non-Hips bones (they're static in Mixamo anims)
+          // Skip scale tracks
         }
 
         console.log(`Animation "${name}": ${srcClip.tracks.length} src tracks → ${tracks.length} matched`);
@@ -492,6 +584,31 @@ function playAnim(name, activeBtn) {
   document.querySelectorAll('.btn.anim').forEach(b => b.classList.remove('active'));
   if (activeBtn) activeBtn.classList.add('active');
 }
+
+// ── Debug tools ──
+let normalMatActive = false;
+let wireframeActive = false;
+let originalMat = null;
+
+document.getElementById('btn-normal').addEventListener('click', () => {
+  if (!skinnedMesh) return;
+  normalMatActive = !normalMatActive;
+  if (normalMatActive) {
+    originalMat = skinnedMesh.material;
+    skinnedMesh.material = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide, wireframe: wireframeActive });
+  } else {
+    skinnedMesh.material = originalMat || new THREE.MeshStandardMaterial({ color: 0x8888aa, roughness: 0.6, metalness: 0.1, side: THREE.DoubleSide });
+    if (wireframeActive) skinnedMesh.material.wireframe = true;
+  }
+  st('debug').textContent = `Debug: normal=${normalMatActive}, wireframe=${wireframeActive}`;
+});
+
+document.getElementById('btn-wireframe').addEventListener('click', () => {
+  if (!skinnedMesh) return;
+  wireframeActive = !wireframeActive;
+  skinnedMesh.material.wireframe = wireframeActive;
+  st('debug').textContent = `Debug: normal=${normalMatActive}, wireframe=${wireframeActive}`;
+});
 
 // ── Resize ──
 window.addEventListener('resize', () => {
