@@ -122,8 +122,9 @@ let skinnedMesh = null;
 let skelHelper = null;
 let mixer = null;
 let currentAction = null;
-let fitScale = 1;  // stored for animation position scaling
-let fitYOffset = 0; // stored for Hips position correction
+let fitScale = 1;
+let fitYOffset = 0;
+let originalBindHipsPos = new THREE.Vector3(0, 1, 0); // captured once at bind time
 const animClips = {};
 
 const st = key => document.getElementById('st-' + key);
@@ -495,6 +496,11 @@ document.getElementById('btn-rig').addEventListener('click', () => {
       skinnedMesh.add(clonedRoot);
       skinnedMesh.bind(skeleton);
 
+      // Capture bind pose Hips position ONCE (immutable reference for all animations)
+      const hipsBone = skeleton.bones.find(b => b.name === 'mixamorigHips');
+      if (hipsBone) originalBindHipsPos = hipsBone.position.clone();
+      console.log('Original bind Hips position (stored):', originalBindHipsPos);
+
       // Remove original model, add skinned mesh
       scene.remove(userModelObj);
       scene.add(skinnedMesh);
@@ -560,9 +566,9 @@ document.querySelectorAll('.btn.anim').forEach(btn => {
           skinnedMesh.skeleton.bones.map(b => b.name)
         );
 
-        // Get the bind pose Hips position for reference
-        const bindHipsPos = skinnedMesh.skeleton.bones.find(b => b.name === 'mixamorigHips')?.position.clone();
-        console.log('Bind Hips position:', bindHipsPos);
+        // Use the STORED bind pose (not current bone position which changes during animation)
+        const bindHP = originalBindHipsPos;
+        console.log('Using stored bind Hips:', bindHP);
 
         for (const t of srcClip.tracks) {
           const parts = t.name.split('.');
@@ -576,18 +582,23 @@ document.querySelectorAll('.btn.anim').forEach(btn => {
           nt.name = boneName + '.' + prop;
 
           if (prop === 'quaternion') {
-            // Rotation tracks only — position tracks cause Hips to snap to origin
             tracks.push(nt);
           } else if (prop === 'position' && boneName === 'mixamorigHips') {
-            // Log for diagnosis (not added to tracks)
+            // Offset ALL axes: anchor first frame to bind pose, preserve all motion
             const vals = nt.values;
-            console.log(`[DIAG] Hips position track: ${vals.length/3} keyframes`);
-            console.log(`  first: (${vals[0].toFixed(2)}, ${vals[1].toFixed(2)}, ${vals[2].toFixed(2)})`);
-            if (vals.length > 3) console.log(`  last:  (${vals[vals.length-3].toFixed(2)}, ${vals[vals.length-2].toFixed(2)}, ${vals[vals.length-1].toFixed(2)})`);
+            const offsetX = bindHP.x - vals[0];
+            const offsetY = bindHP.y - vals[1];
+            const offsetZ = bindHP.z - vals[2];
+
+            console.log(`[FIX] offsets: (${offsetX.toFixed(4)}, ${offsetY.toFixed(4)}, ${offsetZ.toFixed(4)})`);
+
+            for (let i = 0; i < vals.length; i += 3) {
+              vals[i]     += offsetX;
+              vals[i + 1] += offsetY;
+              vals[i + 2] += offsetZ;
+            }
+            tracks.push(nt);
           }
-          // Position tracks skipped: animation FBX stores height in parent node,
-          // not in Hips.position. Our skeleton has no parent node, so applying
-          // position tracks pulls Hips to origin.
           // Skip position tracks for non-Hips bones (they're static in Mixamo anims)
           // Skip scale tracks
         }
@@ -672,10 +683,21 @@ window.addEventListener('resize', () => {
 });
 
 // ── Render ──
+const _hipsWP = new THREE.Vector3();
 (function animate() {
   requestAnimationFrame(animate);
   const dt = clock.getDelta();
   if (mixer) mixer.update(dt);
+
+  // Camera follows Hips position
+  if (skinnedMesh) {
+    const hipsBone = skinnedMesh.skeleton.bones.find(b => b.name === 'mixamorigHips');
+    if (hipsBone) {
+      hipsBone.getWorldPosition(_hipsWP);
+      controls.target.lerp(_hipsWP, 0.1);  // smooth follow
+    }
+  }
+
   controls.update();
   renderer.render(scene, camera);
 })();
