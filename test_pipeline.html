@@ -576,17 +576,13 @@ document.querySelectorAll('.btn.anim').forEach(btn => {
           nt.name = boneName + '.' + prop;
 
           if (prop === 'quaternion') {
-            // Rotation tracks: use as-is (this is the core animation data)
+            // Rotation tracks: use as-is
             tracks.push(nt);
           } else if (prop === 'position' && boneName === 'mixamorigHips') {
-            // Hips position: Y is free (up/down motion), XZ locked (no drift)
+            // Hips position: just scale from cm to model space, no locking
             const vals = nt.values;
-            const bindX = bindHipsPos ? bindHipsPos.x : 0;
-            const bindZ = bindHipsPos ? bindHipsPos.z : 0;
-            for (let i = 0; i < vals.length; i += 3) {
-              vals[i]     = bindX;                                  // X: locked
-              vals[i + 1] = vals[i + 1] * fitScale + fitYOffset;   // Y: free (scaled)
-              vals[i + 2] = bindZ;                                  // Z: locked
+            for (let i = 0; i < vals.length; i++) {
+              vals[i] *= fitScale;
             }
             tracks.push(nt);
           }
