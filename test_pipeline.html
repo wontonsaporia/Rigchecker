@@ -576,16 +576,18 @@ document.querySelectorAll('.btn.anim').forEach(btn => {
           nt.name = boneName + '.' + prop;
 
           if (prop === 'quaternion') {
-            // Rotation tracks: use as-is
+            // Rotation tracks only — position tracks cause Hips to snap to origin
             tracks.push(nt);
           } else if (prop === 'position' && boneName === 'mixamorigHips') {
-            // Hips position: just scale from cm to model space, no locking
+            // Log for diagnosis (not added to tracks)
             const vals = nt.values;
-            for (let i = 0; i < vals.length; i++) {
-              vals[i] *= fitScale;
-            }
-            tracks.push(nt);
+            console.log(`[DIAG] Hips position track: ${vals.length/3} keyframes`);
+            console.log(`  first: (${vals[0].toFixed(2)}, ${vals[1].toFixed(2)}, ${vals[2].toFixed(2)})`);
+            if (vals.length > 3) console.log(`  last:  (${vals[vals.length-3].toFixed(2)}, ${vals[vals.length-2].toFixed(2)}, ${vals[vals.length-1].toFixed(2)})`);
           }
+          // Position tracks skipped: animation FBX stores height in parent node,
+          // not in Hips.position. Our skeleton has no parent node, so applying
+          // position tracks pulls Hips to origin.
           // Skip position tracks for non-Hips bones (they're static in Mixamo anims)
           // Skip scale tracks
         }
