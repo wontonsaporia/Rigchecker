@@ -7,129 +7,98 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Space+Mono:wght@400;700&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --bg:#1a1a2e;--bg2:#16213e;--surface:#222244;--surface2:#2a2a4a;
-    --text:#e8e8f0;--text2:#9999bb;--accent:#e94560;--accent2:#ff6b6b;
-    --green:#4ecdc4;--blue:#45b7d1;--yellow:#f9ca24;--orange:#f0932b;--purple:#a29bfe;
-    --sans:'Noto Sans JP',sans-serif;--mono:'Space Mono',monospace;
-  }
+  :root{--bg:#1a1a2e;--bg2:#16213e;--surface:#222244;--surface2:#2a2a4a;--text:#e8e8f0;--text2:#9999bb;--accent:#e94560;--accent2:#ff6b6b;--green:#4ecdc4;--blue:#45b7d1;--yellow:#f9ca24;--orange:#f0932b;--purple:#a29bfe;--sans:'Noto Sans JP',sans-serif;--mono:'Space Mono',monospace}
   html,body{width:100%;height:100%;overflow:hidden}
   body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
-  .app-header{height:48px;background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:100}
-  .app-logo{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);letter-spacing:.05em}
-  .app-logo span{color:var(--text2);font-weight:400;font-size:11px;margin-left:6px}
-  .step-indicator{display:flex;gap:4px;margin-left:auto}
-  .step-dot{width:28px;height:6px;border-radius:3px;background:var(--surface2);transition:background .3s}
-  .step-dot.active{background:var(--accent)}.step-dot.done{background:var(--green)}
-  .app-main{flex:1;display:flex;position:relative;overflow:hidden}
-  #canvas-container{flex:1;position:relative}
-  #canvas-container canvas{display:block;width:100%!important;height:100%!important}
-  .screen{position:absolute;inset:0;display:none;z-index:10}.screen.active{display:flex}
-  #screen-upload{flex-direction:column;align-items:center;justify-content:center;background:var(--bg)}
-  .upload-area{width:340px;max-width:90%;padding:48px 32px;border:2px dashed rgba(255,255,255,.15);border-radius:16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
-  .upload-area:hover,.upload-area.dragover{border-color:var(--accent);background:rgba(233,69,96,.05)}
-  .upload-icon{font-size:48px;margin-bottom:16px;opacity:.6}
-  .upload-title{font-size:18px;font-weight:700;margin-bottom:8px}
-  .upload-sub{font-size:13px;color:var(--text2);line-height:1.6}
-  .upload-btn{display:inline-block;margin-top:20px;padding:10px 28px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:background .2s}
-  .upload-btn:hover{background:var(--accent2)}
-  #file-input{display:none}
-  .sidebar{width:260px;background:var(--bg2);border-left:1px solid rgba(255,255,255,.08);display:none;flex-direction:column;flex-shrink:0;overflow-y:auto}
-  .sidebar.visible{display:flex}
-  .sidebar-title{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.08em;padding:16px 16px 8px;color:var(--text2);text-transform:uppercase}
-  .sidebar-desc{font-size:12px;color:var(--text2);padding:0 16px 16px;line-height:1.6}
-  .marker-list{padding:0 12px;display:flex;flex-direction:column;gap:4px}
-  .marker-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:700;font-family:var(--mono);transition:background .2s;cursor:default}
-  .marker-item.current{background:rgba(233,69,96,.15);outline:1px solid rgba(233,69,96,.3)}
-  .marker-item.placed{opacity:.5}
-  .marker-dot{width:18px;height:18px;border-radius:50%;border:2.5px solid currentColor;flex-shrink:0;display:flex;align-items:center;justify-content:center}
-  .marker-dot.filled::after{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}
-  .marker-label{letter-spacing:.06em}
-  .marker-status{margin-left:auto;font-size:10px;font-weight:400;color:var(--text2)}
-  .m-chin{color:var(--blue)}.m-wrists{color:var(--yellow)}.m-elbows{color:var(--orange)}.m-knees{color:var(--purple)}.m-groin{color:var(--accent)}
-  .sym-toggle{display:flex;align-items:center;gap:8px;padding:12px 16px;font-size:12px;border-top:1px solid rgba(255,255,255,.06);margin-top:8px}
-  .sym-toggle input[type="checkbox"]{accent-color:var(--green);width:16px;height:16px}
-  .rig-btn-wrap{padding:16px;margin-top:auto}
-  .rig-btn{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:var(--sans);cursor:pointer;transition:background .2s,transform .1s}
-  .rig-btn:hover{background:var(--accent2)}.rig-btn:active{transform:scale(.97)}
-  .rig-btn:disabled{background:var(--surface2);color:var(--text2);cursor:not-allowed}
-  .back-btn{padding:8px 16px;margin:0 0 8px;background:none;border:1px solid rgba(255,255,255,.15);color:var(--text2);border-radius:6px;font-size:12px;font-family:var(--sans);cursor:pointer;width:100%}
-  .back-btn:hover{border-color:rgba(255,255,255,.3);color:var(--text)}
-  .anim-grid{padding:8px 12px;display:flex;flex-direction:column;gap:4px}
-  .anim-btn{width:100%;padding:12px 14px;background:var(--surface);border:1px solid rgba(255,255,255,.08);color:var(--text);border-radius:8px;font-size:13px;font-weight:700;font-family:var(--sans);cursor:pointer;text-align:left;transition:background .2s,border-color .2s}
-  .anim-btn:hover{background:var(--surface2);border-color:rgba(255,255,255,.15)}
-  .anim-btn.active{background:rgba(233,69,96,.15);border-color:var(--accent);color:var(--accent2)}
-  .anim-btn .anim-name{display:block}.anim-btn .anim-sub{display:block;font-size:10px;font-weight:400;color:var(--text2);margin-top:2px}
-  .loading-overlay{position:absolute;inset:0;background:rgba(26,26,46,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50}
-  .loading-overlay.visible{display:flex}
-  .loading-spinner{width:48px;height:48px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  .hdr{height:48px;background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:100}
+  .logo{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);letter-spacing:.05em}
+  .logo span{color:var(--text2);font-weight:400;font-size:11px;margin-left:6px}
+  .dots{display:flex;gap:4px;margin-left:auto}
+  .dot{width:28px;height:6px;border-radius:3px;background:var(--surface2);transition:background .3s}
+  .dot.on{background:var(--accent)}.dot.done{background:var(--green)}
+  .main{flex:1;display:flex;position:relative;overflow:hidden}
+  #cv{flex:1;position:relative}
+  #cv canvas{display:block;width:100%!important;height:100%!important}
+  .scr{position:absolute;inset:0;display:none;z-index:10;flex-direction:column;align-items:center;justify-content:center;background:var(--bg)}
+  .scr.on{display:flex}
+  .sb{width:260px;background:var(--bg2);border-left:1px solid rgba(255,255,255,.08);display:none;flex-direction:column;flex-shrink:0;overflow-y:auto}
+  .sb.on{display:flex}
+  .sb-t{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.08em;padding:16px 16px 8px;color:var(--text2);text-transform:uppercase}
+  .sb-d{font-size:12px;color:var(--text2);padding:0 16px 12px;line-height:1.6}
+  .upl{width:340px;max-width:90%;padding:48px 32px;border:2px dashed rgba(255,255,255,.15);border-radius:16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
+  .upl:hover,.upl.dg{border-color:var(--accent);background:rgba(233,69,96,.05)}
+  .upl-ico{font-size:48px;margin-bottom:16px;opacity:.6}
+  .upl-ttl{font-size:18px;font-weight:700;margin-bottom:8px}
+  .upl-sub{font-size:13px;color:var(--text2);line-height:1.6}
+  .upl-btn{display:inline-block;margin-top:20px;padding:10px 28px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)}
+  .upl-btn:hover{background:var(--accent2)}
+  #fi{display:none}
+  .mk-list{padding:0 12px;display:flex;flex-direction:column;gap:4px}
+  .mk{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:700;font-family:var(--mono);transition:background .2s}
+  .mk.cur{background:rgba(233,69,96,.15);outline:1px solid rgba(233,69,96,.3)}
+  .mk.done{opacity:.5}
+  .mk-dot{width:18px;height:18px;border-radius:50%;border:2.5px solid currentColor;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .mk-dot.filled::after{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}
+  .mk-st{margin-left:auto;font-size:10px;font-weight:400;color:var(--text2)}
+  .c-chin{color:var(--blue)}.c-wri{color:var(--yellow)}.c-elb{color:var(--orange)}.c-kne{color:var(--purple)}.c-gro{color:var(--accent)}
+  .sym{display:flex;align-items:center;gap:8px;padding:12px 16px;font-size:12px;border-top:1px solid rgba(255,255,255,.06);margin-top:8px}
+  .sym input{accent-color:var(--green);width:16px;height:16px}
+  .btw{padding:12px 16px;margin-top:auto}
+  .btn-main{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;font-family:var(--sans);cursor:pointer}
+  .btn-main:hover{background:var(--accent2)}.btn-main:disabled{background:var(--surface2);color:var(--text2);cursor:not-allowed}
+  .btn-back{width:100%;padding:8px 16px;margin-bottom:8px;background:none;border:1px solid rgba(255,255,255,.15);color:var(--text2);border-radius:6px;font-size:12px;font-family:var(--sans);cursor:pointer}
+  .btn-back:hover{border-color:rgba(255,255,255,.3);color:var(--text)}
+  .ag{padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+  .ab{width:100%;padding:12px 14px;background:var(--surface);border:1px solid rgba(255,255,255,.08);color:var(--text);border-radius:8px;font-size:13px;font-weight:700;font-family:var(--sans);cursor:pointer;text-align:left;transition:background .2s,border-color .2s}
+  .ab:hover{background:var(--surface2);border-color:rgba(255,255,255,.15)}
+  .ab.on{background:rgba(233,69,96,.15);border-color:var(--accent);color:var(--accent2)}
+  .ab .an{display:block}.ab .as{display:block;font-size:10px;font-weight:400;color:var(--text2);margin-top:2px}
+  .btn-pause{width:100%;padding:10px;background:#2a5a2a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;font-family:var(--sans);cursor:pointer;margin-bottom:8px;display:none}
+  .ld{position:absolute;inset:0;background:rgba(26,26,46,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50}
+  .ld.on{display:flex}
+  .sp{width:48px;height:48px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .loading-text{margin-top:16px;font-size:14px;color:var(--text2)}
-  .status-bar{height:28px;background:var(--bg2);border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 16px;font-family:var(--mono);font-size:10px;color:var(--text2);flex-shrink:0;gap:16px}
-  .guide-overlay{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);padding:10px 24px;border-radius:10px;font-size:14px;font-weight:700;color:var(--text);pointer-events:none;z-index:20;white-space:nowrap;display:none}
-  .guide-overlay.visible{display:block}
-  @media(max-width:600px){.sidebar{position:absolute;right:0;top:0;bottom:0;width:260px;z-index:30;box-shadow:-4px 0 20px rgba(0,0,0,.4)}}
+  .ld-t{margin-top:16px;font-size:14px;color:var(--text2)}
+  .guide{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);padding:10px 24px;border-radius:10px;font-size:14px;font-weight:700;color:var(--text);pointer-events:none;z-index:20;white-space:nowrap;display:none}
+  .guide.on{display:block}
+  .stat{height:28px;background:var(--bg2);border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;padding:0 16px;font-family:var(--mono);font-size:10px;color:var(--text2);flex-shrink:0;gap:16px}
+  @media(max-width:600px){.sb{position:absolute;right:0;top:0;bottom:0;width:260px;z-index:30;box-shadow:-4px 0 20px rgba(0,0,0,.4)}}
 </style>
 </head>
 <body>
-<div class="app-header">
-  <div class="app-logo">RIGCHECKER <span>v0.2</span></div>
-  <div class="step-indicator">
-    <div class="step-dot active" id="dot-upload"></div>
-    <div class="step-dot" id="dot-markers"></div>
-    <div class="step-dot" id="dot-animate"></div>
+<div class="hdr"><div class="logo">RIGCHECKER <span>v1.0</span></div><div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div></div>
+<div class="main">
+  <div id="cv"></div>
+  <div class="guide" id="guide"></div>
+  <div class="scr on" id="s-upload">
+    <div class="upl" id="upl"><div class="upl-ico">📦</div><div class="upl-ttl">3Dモデルをアップロード</div><div class="upl-sub">Nomad Sculpt で作った FBX ファイルを<br>選択またはドラッグ＆ドロップ</div><button class="upl-btn" id="upl-btn">ファイルを選択</button><input type="file" id="fi" accept=".fbx,.glb"></div>
+    <div style="margin-top:16px;font-family:var(--mono);font-size:10px;color:var(--text2)" id="ref-st">リファレンス骨格を読み込み中...</div>
   </div>
+  <div class="sb" id="sb-mk"><div class="sb-t">Markers</div><div class="sb-d">モデル上の5箇所をタップして位置を教えてください。</div>
+    <div class="mk-list" id="mk-list">
+      <div class="mk cur c-chin" data-k="chin"><div class="mk-dot"></div><span>CHIN</span><span class="mk-st">— タップ</span></div>
+      <div class="mk c-wri" data-k="wrists"><div class="mk-dot"></div><span>WRISTS</span><span class="mk-st"></span></div>
+      <div class="mk c-elb" data-k="elbows"><div class="mk-dot"></div><span>ELBOWS</span><span class="mk-st"></span></div>
+      <div class="mk c-kne" data-k="knees"><div class="mk-dot"></div><span>KNEES</span><span class="mk-st"></span></div>
+      <div class="mk c-gro" data-k="groin"><div class="mk-dot"></div><span>GROIN</span><span class="mk-st"></span></div>
+    </div>
+    <div class="sym"><input type="checkbox" id="sym" checked><label for="sym">Use Symmetry</label></div>
+    <div class="btw"><button class="btn-back" id="b-back1">BACK</button><button class="btn-main" id="b-rig" disabled>リグ生成</button></div>
+  </div>
+  <div class="sb" id="sb-an"><div class="sb-t">Animations</div><div class="sb-d">アニメーションを選んでプレビュー</div>
+    <div class="ag" id="ag">
+      <button class="ab" data-a="Breathing Idle"><span class="an">Idle</span><span class="as">待機ポーズ</span></button>
+      <button class="ab" data-a="Shopping Cart Dance"><span class="an">Shopping Cart</span><span class="as">ショッピングカートダンス</span></button>
+      <button class="ab" data-a="Northern Soul Spin Combo"><span class="an">Spin Combo</span><span class="as">スピンコンボダンス</span></button>
+      <button class="ab" data-a="Walking"><span class="an">Walk</span><span class="as">歩行</span></button>
+      <button class="ab" data-a="Standing Jump"><span class="an">Jump</span><span class="as">ジャンプ</span></button>
+      <button class="ab" data-a="Waving"><span class="an">Wave</span><span class="as">手振り</span></button>
+    </div>
+    <div class="btw"><button class="btn-pause" id="b-pause">⏸ 一時停止</button><button class="btn-back" id="b-back2">BACK</button></div>
+  </div>
+  <div class="ld" id="ld"><div class="sp"></div><div class="ld-t" id="ld-t">読み込み中...</div></div>
 </div>
-<div class="app-main">
-  <div id="canvas-container"></div>
-  <div class="guide-overlay" id="guide-overlay"></div>
-  <div class="screen active" id="screen-upload">
-    <div class="upload-area" id="upload-area">
-      <div class="upload-icon">📦</div>
-      <div class="upload-title">3Dモデルをアップロード</div>
-      <div class="upload-sub">Nomad Sculpt で作った FBX ファイルを<br>選択またはドラッグ＆ドロップ</div>
-      <button class="upload-btn" id="upload-btn">ファイルを選択</button>
-      <input type="file" id="file-input" accept=".fbx,.glb,.gltf">
-    </div>
-  </div>
-  <div class="sidebar" id="sidebar-markers">
-    <div class="sidebar-title">Place markers</div>
-    <div class="sidebar-desc">モデル上のマーカー位置をタップして、自動リギングを開始します。</div>
-    <div class="marker-list">
-      <div class="marker-item current m-chin" data-marker="chin"><div class="marker-dot"></div><span class="marker-label">CHIN</span><span class="marker-status">— タップしてください</span></div>
-      <div class="marker-item m-wrists" data-marker="wrists"><div class="marker-dot"></div><span class="marker-label">WRISTS</span><span class="marker-status"></span></div>
-      <div class="marker-item m-elbows" data-marker="elbows"><div class="marker-dot"></div><span class="marker-label">ELBOWS</span><span class="marker-status"></span></div>
-      <div class="marker-item m-knees" data-marker="knees"><div class="marker-dot"></div><span class="marker-label">KNEES</span><span class="marker-status"></span></div>
-      <div class="marker-item m-groin" data-marker="groin"><div class="marker-dot"></div><span class="marker-label">GROIN</span><span class="marker-status"></span></div>
-    </div>
-    <div class="sym-toggle"><input type="checkbox" id="sym-check" checked><label for="sym-check">Use Symmetry</label></div>
-    <div class="rig-btn-wrap">
-      <button class="back-btn" id="btn-back-upload">BACK</button>
-      <button class="rig-btn" id="btn-rig" disabled>リグ生成</button>
-    </div>
-  </div>
-  <div class="sidebar" id="sidebar-anim">
-    <div class="sidebar-title">Animations</div>
-    <div class="sidebar-desc">アニメーションを選んでプレビュー</div>
-    <div class="anim-grid" id="anim-grid">
-      <div class="anim-btn" data-anim="Breathing Idle"><span class="anim-name">Idle</span><span class="anim-sub">待機ポーズ</span></div>
-      <div class="anim-btn" data-anim="Shopping Cart Dance"><span class="anim-name">Shopping Cart</span><span class="anim-sub">ショッピングカートダンス</span></div>
-      <div class="anim-btn" data-anim="Northern Soul Spin Combo"><span class="anim-name">Spin Combo</span><span class="anim-sub">スピンコンボダンス</span></div>
-      <div class="anim-btn" data-anim="Walking"><span class="anim-name">Walk</span><span class="anim-sub">歩行</span></div>
-      <div class="anim-btn" data-anim="Standing Jump"><span class="anim-name">Jump</span><span class="anim-sub">ジャンプ</span></div>
-      <div class="anim-btn" data-anim="Waving"><span class="anim-name">Wave</span><span class="anim-sub">手振り</span></div>
-    </div>
-    <div class="rig-btn-wrap"><button class="back-btn" id="btn-back-markers">BACK</button></div>
-  </div>
-  <div class="loading-overlay" id="loading-overlay"><div class="loading-spinner"></div><div class="loading-text" id="loading-text">読み込み中...</div></div>
-</div>
-<div class="status-bar">
-  <div id="status-poly">ポリゴン: —</div>
-  <div id="status-bones">ボーン: —</div>
-  <div id="status-fps">FPS: —</div>
-  <div id="status-step">ステップ: アップロード待ち</div>
-</div>
-
+<div class="stat"><div id="st-poly">ポリゴン: —</div><div id="st-bones">ボーン: —</div><div id="st-step">ステップ: 起動中</div></div>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
@@ -137,487 +106,89 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-
-// ── FBXLoader patch: Nomad Sculpt FBX compatibility ──
-// Nomad's LayerElementColor structure crashes Three.js's parseVertexColors.
-// Fix: if parse fails on MappingInformationType, neutralize LayerElementColor
-// in the binary and re-parse.
-const _origParse = FBXLoader.prototype.parse;
-FBXLoader.prototype.parse = function(buffer, path) {
-  try {
-    return _origParse.call(this, buffer, path);
-  } catch(err) {
-    if (err.message && err.message.includes('MappingInformationType')) {
-      console.warn('[Rigchecker] Patching Nomad FBX: neutralizing LayerElementColor');
-      const bytes = new Uint8Array(buffer instanceof ArrayBuffer ? buffer : buffer.buffer || buffer);
-      const needle = [76,97,121,101,114,69,108,101,109,101,110,116,67,111,108,111,114]; // "LayerElementColor"
-      // Replace 'C' in 'Color' with 'X' to make parser skip it
-      for (let i = 0; i < bytes.length - needle.length; i++) {
-        let match = true;
-        for (let j = 0; j < needle.length; j++) {
-          if (bytes[i+j] !== needle[j]) { match = false; break; }
-        }
-        if (match) {
-          bytes[i + 12] = 88; // 'C' → 'X' ("LayerElementXolor")
-          console.warn('[Rigchecker] Patched at offset', i);
-        }
-      }
-      return _origParse.call(this, bytes.buffer, path);
-    }
-    throw err;
-  }
-};
-
-// ── State ──
-const state = {
-  currentStep: 'upload',
-  model: null,
-  modelMeshes: [],
-  markerStep: 0,
-  markers: { chin:null, wrists_l:null, wrists_r:null, elbows_l:null, elbows_r:null, knees_l:null, knees_r:null, groin:null },
-  markerSpheres: [],
-  skeleton: null,
-  skinnedMesh: null,
-  skelHelper: null,
-  mixer: null,
-  currentAction: null,
-  animClips: {},
-  useSymmetry: true,
-  clock: new THREE.Clock(),
-  polyCount: 0,
-};
-
-const MARKER_ORDER = ['chin','wrists','elbows','knees','groin'];
-const MARKER_COLORS = { chin:0x45b7d1, wrists:0xf9ca24, elbows:0xf0932b, knees:0xa29bfe, groin:0xe94560 };
-const MARKER_GUIDES = { chin:'あご の位置をタップ', wrists:'手首 をタップ（片側）', elbows:'ひじ をタップ（片側）', knees:'ひざ をタップ（片側）', groin:'股間 の位置をタップ' };
-
-// ── Scene ──
-const container = document.getElementById('canvas-container');
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x1a1a2e);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-container.appendChild(renderer.domElement);
-
-const scene = new THREE.Scene();
-
-// Dual camera system: Perspective for upload/animate, Orthographic for markers
-const perspCamera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-perspCamera.position.set(0, 1.2, 3);
-
-const orthoCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, 0.1, 1000);
-orthoCamera.position.set(0, 1.0, 5);
-
-let camera = perspCamera; // active camera
-
-let controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; controls.dampingFactor = 0.08;
-controls.target.set(0, 0.8, 0); controls.enabled = false;
-
-function switchCamera(type) {
-  const target = controls.target.clone();
-  controls.dispose();
-  if (type === 'ortho') {
-    camera = orthoCamera;
-  } else {
-    camera = perspCamera;
-  }
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.target.copy(target);
-  controls.enabled = true;
-  if (type === 'ortho') {
-    controls.enableRotate = false;   // Ortho: pan only, no rotate
-    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
-    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
-  }
-  onResize();
-  controls.update();
-}
-
-scene.add(new THREE.AmbientLight(0x404060, 1.5));
-const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(3,5,4); scene.add(dl);
-scene.add(new THREE.DirectionalLight(0x4488cc, 0.6).translateX(-3).translateY(2).translateZ(-2));
-scene.add(new THREE.GridHelper(6, 12, 0x333355, 0x222244));
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-
-function onResize() {
-  const w = container.clientWidth, h = container.clientHeight;
-  if (camera.isPerspectiveCamera) {
-    camera.aspect = w / h;
-  } else if (camera.isOrthographicCamera) {
-    const aspect = w / h;
-    const frustumH = camera.top - camera.bottom;  // current vertical frustum
-    camera.left = -frustumH * aspect / 2;
-    camera.right = frustumH * aspect / 2;
-  }
-  camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
-}
-window.addEventListener('resize', onResize);
-
-// ── UI helpers ──
-const $ = id => document.getElementById(id);
-const guide=$('guide-overlay'), loadingOverlay=$('loading-overlay'), loadingText=$('loading-text');
-function showLoading(t){loadingText.textContent=t;loadingOverlay.classList.add('visible')}
-function hideLoading(){loadingOverlay.classList.remove('visible')}
-function showGuide(t){guide.textContent=t;guide.classList.add('visible')}
-function hideGuide(){guide.classList.remove('visible')}
-function setStatus(k,v){const el=$('status-'+k);if(el)el.textContent=el.textContent.split(':')[0]+': '+v}
-
-function updateStepDots(){
-  const steps=['upload','markers','animate'], idx=steps.indexOf(state.currentStep);
-  steps.forEach((s,i)=>{const d=$('dot-'+s);d.className='step-dot';if(i<idx)d.classList.add('done');if(i===idx)d.classList.add('active')});
-}
-function goToStep(step){
-  state.currentStep=step; updateStepDots();
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  $('sidebar-markers').classList.remove('visible'); $('sidebar-anim').classList.remove('visible'); hideGuide();
-  if(step==='upload'){$('screen-upload').classList.add('active');controls.enabled=false;setStatus('step','アップロード待ち')}
-  if(step==='markers'){
-    $('sidebar-markers').classList.add('visible');resetMarkers();
-    // Switch to Orthographic camera facing front
-    const box=new THREE.Box3().setFromObject(state.model);
-    const size=box.getSize(new THREE.Vector3());
-    const center=box.getCenter(new THREE.Vector3());
-    const h=size.y;
-    const padding = 1.2;  // frustum padding
-    orthoCamera.top = h * padding / 2;
-    orthoCamera.bottom = -h * padding / 2;
-    orthoCamera.position.set(0, center.y, h * 2);
-    switchCamera('ortho');
-    controls.target.set(0, center.y, 0);
-    controls.update();
-    showGuide(MARKER_GUIDES[MARKER_ORDER[0]]);setStatus('step','マーカー配置')}
-  if(step==='animate'){
-    $('sidebar-anim').classList.add('visible');
-    // Switch back to Perspective camera
-    const box=new THREE.Box3().setFromObject(state.skinnedMesh||state.model);
-    const center=box.getCenter(new THREE.Vector3());
-    const size=box.getSize(new THREE.Vector3());
-    perspCamera.position.set(0, center.y, size.y * 1.5);
-    switchCamera('persp');
-    controls.target.set(0, center.y, 0);
-    controls.update();
-    setStatus('step','アニメーション再生')}
+// FBX Patch
+const _op=FBXLoader.prototype.parse;FBXLoader.prototype.parse=function(buf,path){try{return _op.call(this,buf,path)}catch(e){if(e.message?.includes('MappingInformationType')){const b=new Uint8Array(buf instanceof ArrayBuffer?buf:buf.buffer||buf);const n=[76,97,121,101,114,69,108,101,109,101,110,116,67,111,108,111,114];for(let i=0;i<b.length-n.length;i++){let m=true;for(let j=0;j<n.length;j++){if(b[i+j]!==n[j]){m=false;break}}if(m)b[i+12]=88}return _op.call(this,b.buffer,path)}throw e}};
+// Scene
+const cv=document.getElementById('cv'),renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));renderer.setClearColor(0x1a1a2e);cv.appendChild(renderer.domElement);
+const scene=new THREE.Scene();
+const perspCam=new THREE.PerspectiveCamera(50,1,0.01,100);perspCam.position.set(0,1.2,3);
+const orthoCam=new THREE.OrthographicCamera(-2,2,2,-2,0.01,100);orthoCam.position.set(0,1,5);
+let camera=perspCam;
+let controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=0.08;controls.target.set(0,0.8,0);controls.enabled=false;
+function switchCam(type){const tgt=controls.target.clone();controls.dispose();camera=type==='ortho'?orthoCam:perspCam;controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=0.08;controls.target.copy(tgt);controls.enabled=true;if(type==='ortho'){controls.enableRotate=false;controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_PAN}}onResize();controls.update()}
+scene.add(new THREE.AmbientLight(0x404060,1.5));scene.add(new THREE.DirectionalLight(0xffffff,2).translateX(3).translateY(5).translateZ(4));scene.add(new THREE.DirectionalLight(0x4488cc,0.6).translateX(-3).translateY(2).translateZ(-2));scene.add(new THREE.GridHelper(6,12,0x333355,0x222244));
+const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),clock=new THREE.Clock();
+function onResize(){const w=cv.clientWidth,h=cv.clientHeight;if(camera.isPerspectiveCamera){camera.aspect=w/h}else{const a=w/h,fh=camera.top-camera.bottom;camera.left=-fh*a/2;camera.right=fh*a/2}camera.updateProjectionMatrix();renderer.setSize(w,h)}
+window.addEventListener('resize',onResize);
+// State
+let refData=null,userModel=null,userMeshes=[],skinnedMesh=null,skelHelper=null,mixer=null,currentAction=null,fitScale=1,fitYOffset=0,originalBindHipsPos=new THREE.Vector3(0,1,0),animPaused=false,step='upload';
+const animClips={};
+const MK_ORDER=['chin','wrists','elbows','knees','groin'];
+const MK_COLORS={chin:0x45b7d1,wrists:0xf9ca24,elbows:0xf0932b,knees:0xa29bfe,groin:0xe94560};
+const MK_GUIDES={chin:'あご をタップ',wrists:'手首 をタップ（片側）',elbows:'ひじ をタップ（片側）',knees:'ひざ をタップ（片側）',groin:'股間 をタップ'};
+let mkStep=0,markers={},mkSpheres=[],useSym=true;
+// UI
+const $=id=>document.getElementById(id);
+function showLoad(t){$('ld-t').textContent=t;$('ld').classList.add('on')}
+function hideLoad(){$('ld').classList.remove('on')}
+function showGuide(t){$('guide').textContent=t;$('guide').classList.add('on')}
+function hideGuide(){$('guide').classList.remove('on')}
+function setSt(k,v){const el=$('st-'+k);if(el)el.textContent=el.textContent.split(':')[0]+': '+v}
+function goStep(s){
+  step=s;const steps=['upload','markers','animate'],idx=steps.indexOf(s);
+  steps.forEach((st,i)=>{const d=$('d'+i);d.className='dot';if(i<idx)d.classList.add('done');if(i===idx)d.classList.add('on')});
+  $('s-upload').classList.remove('on');$('sb-mk').classList.remove('on');$('sb-an').classList.remove('on');hideGuide();
+  if(s==='upload'){$('s-upload').classList.add('on');controls.enabled=false;setSt('step','アップロード待ち')}
+  if(s==='markers'){$('sb-mk').classList.add('on');resetMarkers();const box=new THREE.Box3().setFromObject(userModel),sz=box.getSize(new THREE.Vector3()),ctr=box.getCenter(new THREE.Vector3()),h=sz.y;orthoCam.top=h*1.2/2;orthoCam.bottom=-h*1.2/2;orthoCam.position.set(0,ctr.y,h*2);switchCam('ortho');controls.target.set(0,ctr.y,0);controls.update();showGuide(MK_GUIDES[MK_ORDER[0]]);setSt('step','マーカー配置')}
+  if(s==='animate'){$('sb-an').classList.add('on');const box=new THREE.Box3().setFromObject(skinnedMesh||userModel),ctr=box.getCenter(new THREE.Vector3()),sz=box.getSize(new THREE.Vector3());perspCam.position.set(0,ctr.y,sz.y*1.5);switchCam('persp');controls.target.set(0,ctr.y,0);controls.update();setSt('step','アニメーション再生')}
   onResize();
 }
-
-// ── Upload ──
-const uploadArea=$('upload-area'), fileInput=$('file-input');
-$('upload-btn').addEventListener('click',e=>{e.stopPropagation();fileInput.click()});
-uploadArea.addEventListener('click',()=>fileInput.click());
-uploadArea.addEventListener('dragover',e=>{e.preventDefault();uploadArea.classList.add('dragover')});
-uploadArea.addEventListener('dragleave',()=>uploadArea.classList.remove('dragover'));
-uploadArea.addEventListener('drop',e=>{e.preventDefault();uploadArea.classList.remove('dragover');if(e.dataTransfer.files.length)loadModelFile(e.dataTransfer.files[0])});
-fileInput.addEventListener('change',()=>{if(fileInput.files.length)loadModelFile(fileInput.files[0])});
-
-// ── Model loading ──
-function loadModelFile(file){
-  const ext=file.name.split('.').pop().toLowerCase();
-  showLoading('モデルを読み込み中...');
-  const reader=new FileReader();
-  reader.onload=function(e){
-    const buf=e.target.result;
-    if(ext==='fbx'){
-      try{onModelLoaded(new FBXLoader().parse(buf))}
-      catch(err){hideLoading();alert('FBXの読み込みに失敗しました:\n'+err.message);console.error(err)}
-    } else if(ext==='glb'||ext==='gltf'){
-      import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>{
-        new GLTFLoader().parse(buf,'',g=>onModelLoaded(g.scene),err=>{hideLoading();alert('GLB読込失敗:\n'+err.message)});
-      });
-    } else {hideLoading();alert('FBX または GLB ファイルを使用してください。')}
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function onModelLoaded(object){
-  if(state.model)scene.remove(state.model);
-  state.modelMeshes=[]; state.polyCount=0; state.model=object;
-
-  // Normalize
-  const box=new THREE.Box3().setFromObject(object);
-  const size=box.getSize(new THREE.Vector3());
-  const center=box.getCenter(new THREE.Vector3());
-  const scale=2.0/Math.max(size.x,size.y,size.z);
-  object.scale.multiplyScalar(scale);
-  box.setFromObject(object); box.getCenter(center);
-  object.position.sub(center);
-  box.setFromObject(object); object.position.y-=box.min.y;
-
-  object.traverse(child=>{
-    if(child.isMesh){
-      state.modelMeshes.push(child);
-      if(!child.geometry.attributes.normal) child.geometry.computeVertexNormals();
-      child.material=new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.1,side:THREE.DoubleSide});
-      child.castShadow=true; child.receiveShadow=true;
-      const idx=child.geometry.index;
-      state.polyCount+=idx?idx.count/3:child.geometry.attributes.position.count/3;
-    }
-  });
-
-  scene.add(object);
-  setStatus('poly', Math.round(state.polyCount).toLocaleString());
-  const h=size.y*scale;
-  controls.target.set(0,h*0.45,0); camera.position.set(0,h*0.5,h*1.5); controls.update();
-  hideLoading(); goToStep('markers');
-}
-
-// ── Markers ──
-function resetMarkers(){
-  state.markerStep=0;
-  Object.keys(state.markers).forEach(k=>state.markers[k]=null);
-  state.markerSpheres.forEach(s=>scene.remove(s)); state.markerSpheres=[];
-  updateMarkerUI(); $('btn-rig').disabled=true;
-}
-function updateMarkerUI(){
-  const cur=MARKER_ORDER[state.markerStep];
-  document.querySelectorAll('.marker-item').forEach(item=>{
-    const k=item.dataset.marker, dot=item.querySelector('.marker-dot'), st=item.querySelector('.marker-status');
-    item.classList.remove('current','placed'); dot.classList.remove('filled');
-    if(k===cur&&state.markerStep<MARKER_ORDER.length){item.classList.add('current');st.textContent='— タップしてください'}
-    if(isMarkerPlaced(k)){item.classList.add('placed');dot.classList.add('filled');st.textContent='✓'}
-  });
-}
-function isMarkerPlaced(k){
-  if(k==='chin')return state.markers.chin!==null;
-  if(k==='groin')return state.markers.groin!==null;
-  return state.markers[k+'_l']!==null;
-}
-function addMarkerSphere(pos,col){
-  const s=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshBasicMaterial({color:col,depthTest:false}));
-  s.position.copy(pos);s.renderOrder=999;scene.add(s);state.markerSpheres.push(s);
-}
-function onCanvasTap(e){
-  if(state.currentStep!=='markers'||state.markerStep>=MARKER_ORDER.length||!state.modelMeshes.length)return;
-  const rect=renderer.domElement.getBoundingClientRect();
-  pointer.x=((e.clientX-rect.left)/rect.width)*2-1;
-  pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;
-  raycaster.setFromCamera(pointer,camera);
-  const hits=raycaster.intersectObjects(state.modelMeshes,true);
-  if(!hits.length)return;
-  const pt=hits[0].point, key=MARKER_ORDER[state.markerStep], col=MARKER_COLORS[key];
-  if(key==='chin'||key==='groin'){
-    const snapped=pt.clone(); snapped.x=0; // snap to midline
-    state.markers[key]=snapped;addMarkerSphere(snapped,col)}
-  else{
-    state.markers[key+'_l']=pt.clone();addMarkerSphere(pt,col);
-    if(state.useSymmetry){const m=pt.clone();m.x=-m.x;state.markers[key+'_r']=m;addMarkerSphere(m,col)}
-  }
-  state.markerStep++; updateMarkerUI();
-  if(state.markerStep<MARKER_ORDER.length)showGuide(MARKER_GUIDES[MARKER_ORDER[state.markerStep]]);
-  else{showGuide('すべてのマーカーが配置されました！「リグ生成」をタップ');$('btn-rig').disabled=false}
-}
-let tapStart=null;
-renderer.domElement.addEventListener('pointerdown',e=>{tapStart={x:e.clientX,y:e.clientY,t:Date.now()}});
-renderer.domElement.addEventListener('pointerup',e=>{
-  if(!tapStart)return;
-  if(Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)<8&&Date.now()-tapStart.t<300)onCanvasTap(e);
-  tapStart=null;
-});
-$('sym-check').addEventListener('change',e=>{state.useSymmetry=e.target.checked});
-
-// ── Skeleton ──
-function generateSkeleton(){
-  const m=state.markers, hips=m.groin.clone(), chin=m.chin.clone();
-  const headTop=chin.clone(); headTop.y+=((chin.y-hips.y)*0.2);
-  const spine=new THREE.Vector3().lerpVectors(hips,chin,0.15);
-  const spine1=new THREE.Vector3().lerpVectors(hips,chin,0.35);
-  const spine2=new THREE.Vector3().lerpVectors(hips,chin,0.55);
-  const neck=new THREE.Vector3().lerpVectors(hips,chin,0.80);
-  const lE=m.elbows_l,rE=m.elbows_r,lW=m.wrists_l,rW=m.wrists_r,lK=m.knees_l,rK=m.knees_r;
-  // Shoulders: neck height, X position between midline and elbow
-  // TUNABLE: 0.3 = shoulder width ratio (0=at neck, 1=at elbow)
-  const SHOULDER_RATIO = 0.3;
-  const lArmTarget=lE||lW, rArmTarget=rE||rW;
-  const lSh=new THREE.Vector3(lArmTarget.x * SHOULDER_RATIO, neck.y, neck.z);
-  const rSh=new THREE.Vector3(rArmTarget.x * SHOULDER_RATIO, neck.y, neck.z);
-  // UpperArm: between shoulder and elbow, closer to shoulder
-  const lArm=new THREE.Vector3().lerpVectors(lSh,lArmTarget,0.4);
-  const rArm=new THREE.Vector3().lerpVectors(rSh,rArmTarget,0.4);
-  // UpperLeg: hip level, offset sideways toward knees
-  const lUL=hips.clone(); lUL.x=(lK?lK.x:hips.x-0.15)*0.5;
-  const rUL=hips.clone(); rUL.x=(rK?rK.x:hips.x+0.15)*0.5;
-  const lFt=(lK||lUL).clone();lFt.y=0.05; const rFt=(rK||rUL).clone();rFt.y=0.05;
-  const lToe=lFt.clone();lToe.z+=0.1;lToe.y=0; const rToe=rFt.clone();rToe.z+=0.1;rToe.y=0;
-
-  const wp={
-    mixamorigHips:hips, mixamorigSpine:spine, mixamorigSpine1:spine1, mixamorigSpine2:spine2,
-    mixamorigNeck:neck, mixamorigHead:chin, mixamorigHeadTop_End:headTop,
-    mixamorigLeftShoulder:lSh, mixamorigLeftArm:lArm, mixamorigLeftForeArm:lE||lW, mixamorigLeftHand:lW,
-    mixamorigRightShoulder:rSh, mixamorigRightArm:rArm, mixamorigRightForeArm:rE||rW, mixamorigRightHand:rW,
-    mixamorigLeftUpLeg:lUL, mixamorigLeftLeg:lK||lUL, mixamorigLeftFoot:lFt, mixamorigLeftToeBase:lToe,
-    mixamorigRightUpLeg:rUL, mixamorigRightLeg:rK||rUL, mixamorigRightFoot:rFt, mixamorigRightToeBase:rToe,
-  };
-
-  const hier={
-    mixamorigHips:['mixamorigSpine','mixamorigLeftUpLeg','mixamorigRightUpLeg'],
-    mixamorigSpine:['mixamorigSpine1'], mixamorigSpine1:['mixamorigSpine2'],
-    mixamorigSpine2:['mixamorigNeck','mixamorigLeftShoulder','mixamorigRightShoulder'],
-    mixamorigNeck:['mixamorigHead'], mixamorigHead:['mixamorigHeadTop_End'],
-    mixamorigLeftShoulder:['mixamorigLeftArm'], mixamorigLeftArm:['mixamorigLeftForeArm'], mixamorigLeftForeArm:['mixamorigLeftHand'],
-    mixamorigRightShoulder:['mixamorigRightArm'], mixamorigRightArm:['mixamorigRightForeArm'], mixamorigRightForeArm:['mixamorigRightHand'],
-    mixamorigLeftUpLeg:['mixamorigLeftLeg'], mixamorigLeftLeg:['mixamorigLeftFoot'], mixamorigLeftFoot:['mixamorigLeftToeBase'],
-    mixamorigRightUpLeg:['mixamorigRightLeg'], mixamorigRightLeg:['mixamorigRightFoot'], mixamorigRightFoot:['mixamorigRightToeBase'],
-  };
-
-  const bones=[], boneMap={};
-  for(const name of Object.keys(wp)){const b=new THREE.Bone();b.name=name;bones.push(b);boneMap[name]=b}
-  boneMap['mixamorigHips'].position.copy(wp['mixamorigHips']);
-  for(const[pn,cns]of Object.entries(hier)){
-    for(const cn of cns){boneMap[pn].add(boneMap[cn]);boneMap[cn].position.copy(wp[cn].clone().sub(wp[pn]))}
-  }
-  const skeleton=new THREE.Skeleton(bones);
-  state.skeleton=skeleton;
-  return{skeleton,rootBone:boneMap['mixamorigHips'],bones,boneMap,wp};
-}
-
-// ── Auto-skinning ──
-function createSkinnedMesh(skelData){
-  const{skeleton,rootBone,bones,wp}=skelData;
-  state.model.updateMatrixWorld(true);
-
-  // Collect & merge geometries
-  const geos=[];
-  state.model.traverse(c=>{if(c.isMesh&&c.geometry){const g=c.geometry.clone();g.applyMatrix4(c.matrixWorld);if(!g.attributes.normal)g.computeVertexNormals();geos.push(g)}});
-  if(!geos.length){alert('メッシュが見つかりません');return null}
-
-  // Manual merge
-  let totalV=0, totalI=0;
-  for(const g of geos){totalV+=g.attributes.position.count;if(g.index)totalI+=g.index.count}
-  const posArr=new Float32Array(totalV*3), nrmArr=new Float32Array(totalV*3);
-  const idxArr=totalI>0?new Uint32Array(totalI):null;
-  let vo=0,io=0,vertOff=0;
-  for(const g of geos){
-    const p=g.attributes.position;
-    for(let i=0;i<p.count*3;i++)posArr[vo+i]=p.array[i];
-    if(g.attributes.normal){const n=g.attributes.normal;for(let i=0;i<n.count*3;i++)nrmArr[vo+i]=n.array[i]}
-    if(g.index&&idxArr){for(let i=0;i<g.index.count;i++)idxArr[io+i]=g.index.array[i]+vertOff;io+=g.index.count}
-    vertOff+=p.count; vo+=p.count*3;
-  }
-  const geo=new THREE.BufferGeometry();
-  geo.setAttribute('position',new THREE.BufferAttribute(posArr,3));
-  geo.setAttribute('normal',new THREE.BufferAttribute(nrmArr,3));
-  if(idxArr)geo.setIndex(new THREE.BufferAttribute(idxArr,1));
-
-  // Compute skin weights (inverse-square distance to 4 nearest bones)
-  const vCount=geo.attributes.position.count;
-  const bwp=bones.map(b=>wp[b.name]);  // bone world positions in skeleton.bones order
-  const si=new Uint16Array(vCount*4), sw=new Float32Array(vCount*4);
-  const tv=new THREE.Vector3();
-
-  for(let i=0;i<vCount;i++){
-    tv.set(posArr[i*3],posArr[i*3+1],posArr[i*3+2]);
-    const ds=bwp.map((p,idx)=>({idx,d:tv.distanceTo(p)})).sort((a,b)=>a.d-b.d).slice(0,4);
-    let tw=0;
-    const ws=ds.map(d=>{const w=1/(Math.max(d.d,0.01)**2);tw+=w;return w});
-    for(let j=0;j<4;j++){si[i*4+j]=ds[j].idx;sw[i*4+j]=ws[j]/tw}
-  }
-  geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(si,4));
-  geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(sw,4));
-
-  const mat=new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.1,side:THREE.DoubleSide});
-  const sm=new THREE.SkinnedMesh(geo,mat);
-  sm.add(rootBone); sm.bind(skeleton);
-  sm.castShadow=true; sm.receiveShadow=true;
-  return sm;
-}
-
-// ── Rig generation ──
-$('btn-rig').addEventListener('click',()=>{
-  showLoading('リグを生成中...');
-  setTimeout(()=>{
-    try{
-      const sd=generateSkeleton();
-      const sm=createSkinnedMesh(sd);
-      if(!sm){hideLoading();return}
-      scene.remove(state.model);
-      state.markerSpheres.forEach(s=>scene.remove(s)); state.markerSpheres=[];
-      if(state.skelHelper)scene.remove(state.skelHelper);
-      state.skinnedMesh=sm; scene.add(sm);
-      state.skelHelper=new THREE.SkeletonHelper(sm);
-      scene.add(state.skelHelper);
-      state.mixer=new THREE.AnimationMixer(sm);
-      setStatus('bones',sd.bones.length);
-      hideLoading(); goToStep('animate');
-    }catch(err){hideLoading();alert('リグ生成に失敗:\n'+err.message);console.error(err)}
-  },100);
-});
-
-// ── Animation ──
-function loadAnimationFBX(url,name){
-  return new Promise((resolve,reject)=>{
-    new FBXLoader().load(url,obj=>{
-      if(!obj.animations||!obj.animations.length){reject(new Error('No animations in '+name));return}
-      const src=obj.animations[0];
-      // Retarget: remap track names to match our bone names
-      const tracks=[];
-      for(const t of src.tracks){
-        const parts=t.name.split('.');
-        const prop=parts.pop();
-        const path=parts.join('.');
-        // Extract bone name from path (handles "RootNode/Armature/mixamorigHips" etc.)
-        const boneName=path.split('/').pop();
-        if(state.skeleton.bones.find(b=>b.name===boneName)){
-          const nt=t.clone(); nt.name=boneName+'.'+prop; tracks.push(nt);
-        }
-      }
-      const clip=tracks.length>0
-        ? new THREE.AnimationClip(name,src.duration,tracks)
-        : (src.name=name, src);
-      state.animClips[name]=clip;
-      resolve(clip);
-    },undefined,reject);
-  });
-}
-function playAnimation(name){
-  if(!state.mixer||!state.animClips[name])return;
-  if(state.currentAction)state.currentAction.fadeOut(0.3);
-  const a=state.mixer.clipAction(state.animClips[name]);
-  a.reset().fadeIn(0.3).play(); state.currentAction=a;
-  document.querySelectorAll('.anim-btn').forEach(b=>b.classList.toggle('active',b.dataset.anim===name));
-}
-document.querySelectorAll('.anim-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const name=btn.dataset.anim;
-    if(state.animClips[name]){playAnimation(name);return}
-    const url=`animations/${encodeURIComponent(name)}.fbx`;
-    showLoading(name+' を読み込み中...');
-    loadAnimationFBX(url,name).then(()=>{hideLoading();playAnimation(name)})
-    .catch(err=>{hideLoading();console.warn(err);alert(`"${name}" の読み込みに失敗しました。\nanimations/ フォルダを確認してください。`)});
-  });
-});
-
-// ── Navigation ──
-$('btn-back-upload').addEventListener('click',()=>{
-  if(state.skinnedMesh)scene.remove(state.skinnedMesh);
-  if(state.skelHelper)scene.remove(state.skelHelper);
-  state.markerSpheres.forEach(s=>scene.remove(s));
-  if(state.model)scene.add(state.model);
-  goToStep('upload');
-});
-$('btn-back-markers').addEventListener('click',()=>{
-  if(state.skinnedMesh)scene.remove(state.skinnedMesh);
-  if(state.skelHelper)scene.remove(state.skelHelper);
-  if(state.model)scene.add(state.model);
-  if(state.mixer){state.mixer.stopAllAction();state.mixer=null}
-  state.currentAction=null; goToStep('markers');
-});
-
-// ── Render loop ──
-let fc=0,lt=0;
-(function animate(){
-  requestAnimationFrame(animate);
-  const d=state.clock.getDelta();
-  if(state.mixer)state.mixer.update(d);
-  controls.update(); renderer.render(scene,camera);
-  fc++;const n=performance.now();if(n-lt>1000){setStatus('fps',fc);fc=0;lt=n}
-})();
-
-onResize(); goToStep('upload');
+// Reference skeleton
+new FBXLoader().load('T-Pose.fbx',(obj)=>{obj.updateMatrixWorld(true);const bones=[],seen=new Set();obj.traverse(c=>{if(c.isBone){const wp=new THREE.Vector3();c.getWorldPosition(wp);const key=c.name+'|'+wp.x.toFixed(1)+'|'+wp.y.toFixed(1)+'|'+wp.z.toFixed(1);if(!seen.has(key)){seen.add(key);bones.push(c)}}});const rootBone=bones.find(b=>!b.parent?.isBone);let minY=Infinity,maxY=-Infinity;bones.forEach(b=>{const wp=new THREE.Vector3();b.getWorldPosition(wp);if(wp.y<minY)minY=wp.y;if(wp.y>maxY)maxY=wp.y});const hipsWP=new THREE.Vector3();rootBone.getWorldPosition(hipsWP);refData={object:obj,bones,rootBone,totalHeight:maxY-minY,minY,maxY,hipsY:hipsWP.y};$('ref-st').textContent='リファレンス骨格: OK ('+bones.length+' bones)';$('ref-st').style.color='#4ecdc4'},undefined,()=>{$('ref-st').textContent='リファレンス骨格の読み込みに失敗';$('ref-st').style.color='#ff6b6b'});
+// Upload
+$('upl-btn').addEventListener('click',e=>{e.stopPropagation();$('fi').click()});
+$('upl').addEventListener('click',()=>$('fi').click());
+$('upl').addEventListener('dragover',e=>{e.preventDefault();$('upl').classList.add('dg')});
+$('upl').addEventListener('dragleave',()=>$('upl').classList.remove('dg'));
+$('upl').addEventListener('drop',e=>{e.preventDefault();$('upl').classList.remove('dg');if(e.dataTransfer.files.length)loadModel(e.dataTransfer.files[0])});
+$('fi').addEventListener('change',()=>{if($('fi').files.length)loadModel($('fi').files[0])});
+function loadModel(file){showLoad('モデルを読み込み中...');const reader=new FileReader();reader.onload=e=>{try{const obj=new FBXLoader().parse(e.target.result);if(userModel)scene.remove(userModel);userModel=obj;userMeshes=[];const box=new THREE.Box3().setFromObject(obj),sz=box.getSize(new THREE.Vector3()),scale=2.0/Math.max(sz.x,sz.y,sz.z);obj.scale.multiplyScalar(scale);box.setFromObject(obj);const ctr=box.getCenter(new THREE.Vector3());obj.position.sub(ctr);box.setFromObject(obj);obj.position.y-=box.min.y;let pc=0;obj.traverse(c=>{if(c.isMesh){userMeshes.push(c);if(!c.geometry.attributes.normal)c.geometry.computeVertexNormals();c.material=new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.1,side:THREE.DoubleSide});const idx=c.geometry.index;pc+=idx?idx.count/3:c.geometry.attributes.position.count/3}});scene.add(obj);setSt('poly',Math.round(pc).toLocaleString());hideLoad();goStep('markers')}catch(err){hideLoad();alert('読み込みに失敗:\n'+err.message);console.error(err)}};reader.readAsArrayBuffer(file)}
+// Markers
+function resetMarkers(){mkStep=0;markers={};mkSpheres.forEach(s=>scene.remove(s));mkSpheres=[];updateMarkerUI();$('b-rig').disabled=true}
+function updateMarkerUI(){const cur=MK_ORDER[mkStep];document.querySelectorAll('.mk').forEach(el=>{const k=el.dataset.k,dot=el.querySelector('.mk-dot'),st=el.querySelector('.mk-st');el.classList.remove('cur','done');dot.classList.remove('filled');if(k===cur&&mkStep<MK_ORDER.length){el.classList.add('cur');st.textContent='— タップ'}const placed=k==='chin'||k==='groin'?markers[k]:markers[k+'_l'];if(placed){el.classList.add('done');dot.classList.add('filled');st.textContent='✓'}})}
+function addMkSphere(pos,col){const s=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshBasicMaterial({color:col,depthTest:false}));s.position.copy(pos);s.renderOrder=999;scene.add(s);mkSpheres.push(s)}
+function onTap(e){if(step!=='markers'||mkStep>=MK_ORDER.length||!userMeshes.length)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-rect.left)/rect.width)*2-1;pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(userMeshes,true);if(!hits.length)return;const pt=hits[0].point,key=MK_ORDER[mkStep],col=MK_COLORS[key];if(key==='chin'||key==='groin'){const snap=pt.clone();snap.x=0;markers[key]=snap;addMkSphere(snap,col)}else{markers[key+'_l']=pt.clone();addMkSphere(pt,col);if(useSym){const m=pt.clone();m.x=-m.x;markers[key+'_r']=m;addMkSphere(m,col)}}mkStep++;updateMarkerUI();if(mkStep<MK_ORDER.length)showGuide(MK_GUIDES[MK_ORDER[mkStep]]);else{showGuide('「リグ生成」をタップ');$('b-rig').disabled=!refData}}
+let tapSt=null;renderer.domElement.addEventListener('pointerdown',e=>{tapSt={x:e.clientX,y:e.clientY,t:Date.now()}});renderer.domElement.addEventListener('pointerup',e=>{if(!tapSt)return;if(Math.hypot(e.clientX-tapSt.x,e.clientY-tapSt.y)<8&&Date.now()-tapSt.t<300)onTap(e);tapSt=null});
+$('sym').addEventListener('change',e=>{useSym=e.target.checked});
+// Rig Generation (B-plan)
+$('b-rig').addEventListener('click',()=>{if(!refData||!userModel)return;showLoad('リグを生成中...');setTimeout(()=>{try{const modelBox=new THREE.Box3().setFromObject(userModel),modelH=modelBox.getSize(new THREE.Vector3()).y;fitScale=modelH/refData.totalHeight;const refFeetY=refData.minY*fitScale;fitYOffset=-refFeetY;const clonedRoot=refData.rootBone.clone(true);clonedRoot.position.multiplyScalar(fitScale);clonedRoot.traverse(c=>{if(c.isBone&&c!==clonedRoot)c.position.multiplyScalar(fitScale)});clonedRoot.position.y+=fitYOffset;const modelCenter=modelBox.getCenter(new THREE.Vector3());clonedRoot.position.z=modelCenter.z;clonedRoot.updateMatrixWorld(true);let lowestBY=Infinity;clonedRoot.traverse(c=>{if(c.isBone){const wp=new THREE.Vector3();c.getWorldPosition(wp);if(wp.y<lowestBY)lowestBY=wp.y}});const footInset=modelH*0.02;clonedRoot.position.y+=(footInset-lowestBY);clonedRoot.updateMatrixWorld(true);
+const clonedBones=[];clonedRoot.traverse(c=>{if(c.isBone)clonedBones.push(c)});const bwp=clonedBones.map(b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v});const skeleton=new THREE.Skeleton(clonedBones);
+userModel.updateMatrixWorld(true);const geos=[];userModel.traverse(c=>{if(c.isMesh&&c.geometry){const g=c.geometry.clone();g.applyMatrix4(c.matrixWorld);if(!g.attributes.normal)g.computeVertexNormals();geos.push(g)}});
+let totalV=0,totalI=0;for(const g of geos){totalV+=g.attributes.position.count;if(g.index)totalI+=g.index.count}const posArr=new Float32Array(totalV*3),nrmArr=new Float32Array(totalV*3);const idxArr=totalI>0?new Uint32Array(totalI):null;let vo=0,io=0,vertOff=0;for(const g of geos){const p=g.attributes.position;for(let i=0;i<p.count*3;i++)posArr[vo+i]=p.array[i];if(g.attributes.normal){const n=g.attributes.normal;for(let i=0;i<n.count*3;i++)nrmArr[vo+i]=n.array[i]}if(g.index&&idxArr){for(let i=0;i<g.index.count;i++)idxArr[io+i]=g.index.array[i]+vertOff;io+=g.index.count}vertOff+=p.count;vo+=p.count*3}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(posArr,3));geo.setAttribute('normal',new THREE.BufferAttribute(nrmArr,3));if(idxArr)geo.setIndex(new THREE.BufferAttribute(idxArr,1));
+// Bone segments for skinning
+const SB=new Set(['mixamorigHips','mixamorigSpine','mixamorigSpine1','mixamorigSpine2','mixamorigNeck','mixamorigHead','mixamorigLeftShoulder','mixamorigLeftArm','mixamorigLeftForeArm','mixamorigLeftHand','mixamorigRightShoulder','mixamorigRightArm','mixamorigRightForeArm','mixamorigRightHand','mixamorigLeftUpLeg','mixamorigLeftLeg','mixamorigLeftFoot','mixamorigLeftToeBase','mixamorigRightUpLeg','mixamorigRightLeg','mixamorigRightFoot','mixamorigRightToeBase','mixamorigLeftHandThumb1','mixamorigLeftHandThumb2','mixamorigLeftHandThumb3','mixamorigLeftHandIndex1','mixamorigLeftHandIndex2','mixamorigLeftHandIndex3','mixamorigLeftHandMiddle1','mixamorigLeftHandMiddle2','mixamorigLeftHandMiddle3','mixamorigLeftHandRing1','mixamorigLeftHandRing2','mixamorigLeftHandRing3','mixamorigLeftHandPinky1','mixamorigLeftHandPinky2','mixamorigLeftHandPinky3','mixamorigRightHandThumb1','mixamorigRightHandThumb2','mixamorigRightHandThumb3','mixamorigRightHandIndex1','mixamorigRightHandIndex2','mixamorigRightHandIndex3','mixamorigRightHandMiddle1','mixamorigRightHandMiddle2','mixamorigRightHandMiddle3','mixamorigRightHandRing1','mixamorigRightHandRing2','mixamorigRightHandRing3','mixamorigRightHandPinky1','mixamorigRightHandPinky2','mixamorigRightHandPinky3']);
+const CM={mixamorigHips:'mixamorigSpine',mixamorigSpine:'mixamorigSpine1',mixamorigSpine1:'mixamorigSpine2',mixamorigSpine2:'mixamorigNeck',mixamorigNeck:'mixamorigHead',mixamorigHead:'mixamorigHeadTop_End',mixamorigLeftShoulder:'mixamorigLeftArm',mixamorigLeftArm:'mixamorigLeftForeArm',mixamorigLeftForeArm:'mixamorigLeftHand',mixamorigLeftHand:'mixamorigLeftHandMiddle1',mixamorigRightShoulder:'mixamorigRightArm',mixamorigRightArm:'mixamorigRightForeArm',mixamorigRightForeArm:'mixamorigRightHand',mixamorigRightHand:'mixamorigRightHandMiddle1',mixamorigLeftUpLeg:'mixamorigLeftLeg',mixamorigLeftLeg:'mixamorigLeftFoot',mixamorigLeftFoot:'mixamorigLeftToeBase',mixamorigLeftToeBase:null,mixamorigRightUpLeg:'mixamorigRightLeg',mixamorigRightLeg:'mixamorigRightFoot',mixamorigRightFoot:'mixamorigRightToeBase',mixamorigRightToeBase:null,mixamorigLeftHandThumb1:'mixamorigLeftHandThumb2',mixamorigLeftHandThumb2:'mixamorigLeftHandThumb3',mixamorigLeftHandThumb3:null,mixamorigLeftHandIndex1:'mixamorigLeftHandIndex2',mixamorigLeftHandIndex2:'mixamorigLeftHandIndex3',mixamorigLeftHandIndex3:null,mixamorigLeftHandMiddle1:'mixamorigLeftHandMiddle2',mixamorigLeftHandMiddle2:'mixamorigLeftHandMiddle3',mixamorigLeftHandMiddle3:null,mixamorigLeftHandRing1:'mixamorigLeftHandRing2',mixamorigLeftHandRing2:'mixamorigLeftHandRing3',mixamorigLeftHandRing3:null,mixamorigLeftHandPinky1:'mixamorigLeftHandPinky2',mixamorigLeftHandPinky2:'mixamorigLeftHandPinky3',mixamorigLeftHandPinky3:null,mixamorigRightHandThumb1:'mixamorigRightHandThumb2',mixamorigRightHandThumb2:'mixamorigRightHandThumb3',mixamorigRightHandThumb3:null,mixamorigRightHandIndex1:'mixamorigRightHandIndex2',mixamorigRightHandIndex2:'mixamorigRightHandIndex3',mixamorigRightHandIndex3:null,mixamorigRightHandMiddle1:'mixamorigRightHandMiddle2',mixamorigRightHandMiddle2:'mixamorigRightHandMiddle3',mixamorigRightHandMiddle3:null,mixamorigRightHandRing1:'mixamorigRightHandRing2',mixamorigRightHandRing2:'mixamorigRightHandRing3',mixamorigRightHandRing3:null,mixamorigRightHandPinky1:'mixamorigRightHandPinky2',mixamorigRightHandPinky2:'mixamorigRightHandPinky3',mixamorigRightHandPinky3:null};
+const allBWP={};clonedBones.forEach((b,i)=>{allBWP[b.name]=bwp[i]});const skinBones=[];clonedBones.forEach((b,idx)=>{if(!SB.has(b.name))return;const start=bwp[idx],cn=CM[b.name];let end;if(cn&&allBWP[cn]){end=allBWP[cn]}else{const p=b.parent;if(p?.isBone){const pp=new THREE.Vector3();p.getWorldPosition(pp);end=start.clone().add(start.clone().sub(pp).normalize().multiplyScalar(0.05))}else{end=start.clone()}}skinBones.push({idx,start,end,name:b.name})});
+const _ab=new THREE.Vector3(),_ap=new THREE.Vector3(),_cl=new THREE.Vector3();function dTS(pt,s,e){_ab.copy(e).sub(s);_ap.copy(pt).sub(s);const l2=_ab.dot(_ab);if(l2<0.00001)return pt.distanceTo(s);const t=Math.max(0,Math.min(1,_ap.dot(_ab)/l2));_cl.copy(s).addScaledVector(_ab,t);return pt.distanceTo(_cl)}
+const vCount=posArr.length/3,si=new Uint16Array(vCount*4),sw=new Float32Array(vCount*4),tv=new THREE.Vector3();
+for(let i=0;i<vCount;i++){tv.set(posArr[i*3],posArr[i*3+1],posArr[i*3+2]);const ds=skinBones.map(sb=>{let d=dTS(tv,sb.start,sb.end);const ax=Math.abs(tv.x);const isArm=sb.name.includes('Shoulder')||sb.name.includes('Arm')||sb.name.includes('ForeArm')||sb.name.includes('Hand')||sb.name.includes('Thumb')||sb.name.includes('Index')||sb.name.includes('Middle')||sb.name.includes('Ring')||sb.name.includes('Pinky');const isSpine=sb.name.includes('Spine')||sb.name.includes('Hips')||sb.name.includes('Neck')||sb.name.includes('Head');if(isArm&&ax<0.15)d*=2.5;if(isSpine&&ax>0.3&&tv.y>0.5)d*=1.5;return{idx:sb.idx,d}}).sort((a,b)=>a.d-b.d).slice(0,4);const POW=1.5,MNW=0.6,MD=0.005;let tw=0;const ws=ds.map(d=>{const w=1/Math.pow(Math.max(d.d,MD),POW);tw+=w;return w});for(let j=0;j<4;j++)ws[j]/=tw;if(ws[0]<MNW){ws[0]=MNW;const ot=ws[1]+ws[2]+ws[3];if(ot>0.001){const sc=(1-MNW)/ot;ws[1]*=sc;ws[2]*=sc;ws[3]*=sc}}for(let j=0;j<4;j++){si[i*4+j]=ds[j].idx;sw[i*4+j]=ws[j]}}
+geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(si,4));geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(sw,4));
+const mat=new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.1,side:THREE.DoubleSide});skinnedMesh=new THREE.SkinnedMesh(geo,mat);skinnedMesh.add(clonedRoot);skinnedMesh.bind(skeleton);
+const hipsBone=skeleton.bones.find(b=>b.name==='mixamorigHips');if(hipsBone)originalBindHipsPos=hipsBone.position.clone();
+scene.remove(userModel);mkSpheres.forEach(s=>scene.remove(s));mkSpheres=[];scene.add(skinnedMesh);if(skelHelper)scene.remove(skelHelper);skelHelper=new THREE.SkeletonHelper(skinnedMesh);scene.add(skelHelper);mixer=new THREE.AnimationMixer(skinnedMesh);setSt('bones',clonedBones.length);hideLoad();goStep('animate')}catch(err){hideLoad();alert('リグ生成に失敗:\n'+err.message);console.error(err)}},100)});
+// Animation
+function loadAnim(name){return new Promise((resolve,reject)=>{const url='animations/'+encodeURIComponent(name)+'.fbx';new FBXLoader().load(url,(obj)=>{if(!obj.animations?.length){reject(new Error('No animations'));return}const srcClip=obj.animations[0],tracks=[],boneNames=new Set(skinnedMesh.skeleton.bones.map(b=>b.name)),bindHP=originalBindHipsPos;for(const t of srcClip.tracks){const parts=t.name.split('.'),prop=parts.pop(),boneName=parts.join('.').split('/').pop();if(!boneNames.has(boneName))continue;const nt=t.clone();nt.name=boneName+'.'+prop;if(prop==='quaternion'){tracks.push(nt)}else if(prop==='position'&&boneName==='mixamorigHips'){const vals=nt.values,ox=bindHP.x-vals[0],oy=bindHP.y-vals[1],oz=bindHP.z-vals[2];for(let i=0;i<vals.length;i+=3){vals[i]+=ox;vals[i+1]+=oy;vals[i+2]+=oz}tracks.push(nt)}}const clip=tracks.length>0?new THREE.AnimationClip(name,srcClip.duration,tracks):srcClip;animClips[name]=clip;resolve(clip)},undefined,reject)})}
+function playAnim(name){if(!mixer||!animClips[name])return;if(currentAction)currentAction.fadeOut(0.3);const a=mixer.clipAction(animClips[name]);a.reset().fadeIn(0.3).play();currentAction=a;animPaused=false;document.querySelectorAll('.ab').forEach(b=>b.classList.toggle('on',b.dataset.a===name));$('b-pause').style.display='block';$('b-pause').textContent='⏸ 一時停止';$('b-pause').style.background='#2a5a2a'}
+document.querySelectorAll('.ab').forEach(btn=>{btn.addEventListener('click',()=>{const name=btn.dataset.a;if(animClips[name]){playAnim(name);return}showLoad(name+' を読み込み中...');loadAnim(name).then(()=>{hideLoad();playAnim(name)}).catch(err=>{hideLoad();alert('"'+name+'" の読み込みに失敗しました。');console.error(err)})})});
+$('b-pause').addEventListener('click',()=>{if(!currentAction)return;animPaused=!animPaused;currentAction.paused=animPaused;$('b-pause').textContent=animPaused?'▶ 再生':'⏸ 一時停止';$('b-pause').style.background=animPaused?'#5a2a2a':'#2a5a2a'});
+// Navigation
+$('b-back1').addEventListener('click',()=>{if(skinnedMesh){scene.remove(skinnedMesh);skinnedMesh=null}if(skelHelper){scene.remove(skelHelper);skelHelper=null}mkSpheres.forEach(s=>scene.remove(s));if(userModel)scene.add(userModel);goStep('upload')});
+$('b-back2').addEventListener('click',()=>{if(skinnedMesh){scene.remove(skinnedMesh);skinnedMesh=null}if(skelHelper){scene.remove(skelHelper);skelHelper=null}if(mixer){mixer.stopAllAction();mixer=null}currentAction=null;if(userModel)scene.add(userModel);goStep('markers')});
+// Render loop + camera follow
+const _hWP=new THREE.Vector3();
+(function animate(){requestAnimationFrame(animate);const dt=clock.getDelta();if(mixer)mixer.update(dt);if(step==='animate'&&skinnedMesh){const hb=skinnedMesh.skeleton.bones.find(b=>b.name==='mixamorigHips');if(hb){hb.getWorldPosition(_hWP);controls.target.lerp(_hWP,0.1)}}controls.update();renderer.render(scene,camera)})();
+onResize();goStep('upload');
 </script>
 </body>
 </html>
