@@ -123,7 +123,7 @@ const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),clock=new THRE
 function onResize(){const w=cv.clientWidth,h=cv.clientHeight;if(camera.isPerspectiveCamera){camera.aspect=w/h}else{const a=w/h,fh=camera.top-camera.bottom;camera.left=-fh*a/2;camera.right=fh*a/2}camera.updateProjectionMatrix();renderer.setSize(w,h)}
 window.addEventListener('resize',onResize);
 // State
-let refData=null,userModel=null,userMeshes=[],skinnedMesh=null,skelHelper=null,mixer=null,currentAction=null,fitScale=1,fitYOffset=0,originalBindHipsPos=new THREE.Vector3(0,1,0),animPaused=false,step='upload';
+let refData=null,userModel=null,userMeshes=[],skinnedMesh=null,skelHelper=null,mixer=null,currentAction=null,fitScale=1,fitYOffset=0,originalBindHipsPos=new THREE.Vector3(0,1,0),animPaused=false,step='upload',boneLabels=[];
 const animClips={};
 const MK_ORDER=['chin','wrists','elbows','shoulders','knees','groin'];
 const MK_COLORS={chin:0x45b7d1,wrists:0xf9ca24,elbows:0xf0932b,shoulders:0x45d1a0,knees:0xa29bfe,groin:0xe94560};
@@ -284,7 +284,14 @@ for(let i=0;i<vCount;i++){tv.set(posArr[i*3],posArr[i*3+1],posArr[i*3+2]);const 
 geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(si,4));geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(sw,4));
 const mat=new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.1,side:THREE.DoubleSide});skinnedMesh=new THREE.SkinnedMesh(geo,mat);skinnedMesh.add(clonedRoot);skinnedMesh.bind(skeleton);
 const hipsBone=skeleton.bones.find(b=>b.name==='mixamorigHips');if(hipsBone)originalBindHipsPos=hipsBone.position.clone();
-scene.remove(userModel);mkSpheres.forEach(s=>scene.remove(s));mkSpheres=[];scene.add(skinnedMesh);if(skelHelper)scene.remove(skelHelper);skelHelper=new THREE.SkeletonHelper(skinnedMesh);scene.add(skelHelper);mixer=new THREE.AnimationMixer(skinnedMesh);setSt('bones',clonedBones.length);hideLoad();goStep('animate')}catch(err){hideLoad();alert('リグ生成に失敗:\n'+err.message);console.error(err)}},100)});
+scene.remove(userModel);mkSpheres.forEach(s=>scene.remove(s));mkSpheres=[];scene.add(skinnedMesh);if(skelHelper)scene.remove(skelHelper);skelHelper=new THREE.SkeletonHelper(skinnedMesh);scene.add(skelHelper);
+// Bone name labels (main bones only)
+const LABEL_BONES=['mixamorigHips','mixamorigSpine','mixamorigSpine1','mixamorigSpine2','mixamorigNeck','mixamorigHead','mixamorigLeftShoulder','mixamorigLeftArm','mixamorigLeftForeArm','mixamorigLeftHand','mixamorigRightShoulder','mixamorigRightArm','mixamorigRightForeArm','mixamorigRightHand','mixamorigLeftUpLeg','mixamorigLeftLeg','mixamorigLeftFoot','mixamorigLeftToeBase','mixamorigRightUpLeg','mixamorigRightLeg','mixamorigRightFoot','mixamorigRightToeBase'];
+function makeLabel(text){const c=document.createElement('canvas');c.width=256;c.height=40;const ctx=c.getContext('2d');ctx.font='bold 18px monospace';ctx.fillStyle='#ff6b6b';ctx.textAlign='center';ctx.fillText(text.replace('mixamorig',''),128,28);const tex=new THREE.CanvasTexture(c);const mat=new THREE.SpriteMaterial({map:tex,depthTest:false,transparent:true});const sp=new THREE.Sprite(mat);sp.scale.set(0.15,0.025,1);sp.renderOrder=1000;return sp}
+boneLabels.forEach(l=>scene.remove(l.sprite));boneLabels=[];
+skeleton.bones.forEach(b=>{if(LABEL_BONES.includes(b.name)){const lbl=makeLabel(b.name);const wp=new THREE.Vector3();b.getWorldPosition(wp);lbl.position.copy(wp);lbl.position.y+=0.03;scene.add(lbl);boneLabels.push({sprite:lbl,bone:b})}});
+console.log('[LABELS] Added '+boneLabels.length+' bone labels');
+mixer=new THREE.AnimationMixer(skinnedMesh);setSt('bones',clonedBones.length);hideLoad();goStep('animate')}catch(err){hideLoad();alert('リグ生成に失敗:\n'+err.message);console.error(err)}},100)});
 // Animation
 function loadAnim(name){return new Promise((resolve,reject)=>{const url='animations/'+encodeURIComponent(name)+'.fbx';new FBXLoader().load(url,(obj)=>{if(!obj.animations?.length){reject(new Error('No animations'));return}const srcClip=obj.animations[0],tracks=[],boneNames=new Set(skinnedMesh.skeleton.bones.map(b=>b.name)),bindHP=originalBindHipsPos;for(const t of srcClip.tracks){const parts=t.name.split('.'),prop=parts.pop(),boneName=parts.join('.').split('/').pop();if(!boneNames.has(boneName))continue;const nt=t.clone();nt.name=boneName+'.'+prop;if(prop==='quaternion'){tracks.push(nt)}else if(prop==='position'&&boneName==='mixamorigHips'){const vals=nt.values,ox=bindHP.x-vals[0],oy=bindHP.y-vals[1],oz=bindHP.z-vals[2];for(let i=0;i<vals.length;i+=3){vals[i]+=ox;vals[i+1]+=oy;vals[i+2]+=oz}tracks.push(nt)}}const clip=tracks.length>0?new THREE.AnimationClip(name,srcClip.duration,tracks):srcClip;animClips[name]=clip;resolve(clip)},undefined,reject)})}
 function playAnim(name){if(!mixer||!animClips[name])return;if(currentAction)currentAction.fadeOut(0.3);const a=mixer.clipAction(animClips[name]);a.reset().fadeIn(0.3).play();currentAction=a;animPaused=false;document.querySelectorAll('.ab').forEach(b=>b.classList.toggle('on',b.dataset.a===name));$('b-pause').style.display='block';$('b-pause').textContent='⏸ 一時停止';$('b-pause').style.background='#2a5a2a'}
@@ -295,7 +302,7 @@ $('b-back1').addEventListener('click',()=>{if(skinnedMesh){scene.remove(skinnedM
 $('b-back2').addEventListener('click',()=>{if(skinnedMesh){scene.remove(skinnedMesh);skinnedMesh=null}if(skelHelper){scene.remove(skelHelper);skelHelper=null}if(mixer){mixer.stopAllAction();mixer=null}currentAction=null;if(userModel)scene.add(userModel);goStep('markers')});
 // Render loop + camera follow
 const _hWP=new THREE.Vector3();
-(function animate(){requestAnimationFrame(animate);const dt=clock.getDelta();if(mixer)mixer.update(dt);if(step==='animate'&&skinnedMesh){const hb=skinnedMesh.skeleton.bones.find(b=>b.name==='mixamorigHips');if(hb){hb.getWorldPosition(_hWP);controls.target.lerp(_hWP,0.1)}}controls.update();renderer.render(scene,camera)})();
+(function animate(){requestAnimationFrame(animate);const dt=clock.getDelta();if(mixer)mixer.update(dt);if(step==='animate'&&skinnedMesh){const hb=skinnedMesh.skeleton.bones.find(b=>b.name==='mixamorigHips');if(hb){hb.getWorldPosition(_hWP);controls.target.lerp(_hWP,0.1)}boneLabels.forEach(l=>{const wp=new THREE.Vector3();l.bone.getWorldPosition(wp);l.sprite.position.copy(wp);l.sprite.position.y+=0.03})}controls.update();renderer.render(scene,camera)})();
 onResize();goStep('upload');
 </script>
 </body>
