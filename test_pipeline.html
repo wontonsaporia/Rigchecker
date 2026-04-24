@@ -296,6 +296,20 @@ document.getElementById('btn-rig').addEventListener('click', () => {
 
       clonedRoot.updateMatrixWorld(true);
 
+      // Fix ②: Fine-tune Y position — find actual lowest bone and ensure it's at ground
+      let lowestBoneY = Infinity;
+      clonedRoot.traverse(c => {
+        if (c.isBone) {
+          const wp = new THREE.Vector3(); c.getWorldPosition(wp);
+          if (wp.y < lowestBoneY) lowestBoneY = wp.y;
+        }
+      });
+      if (Math.abs(lowestBoneY) > 0.001) {
+        console.log(`[FIT] Correcting Y by ${(-lowestBoneY).toFixed(4)} (lowest bone was at ${lowestBoneY.toFixed(4)})`);
+        clonedRoot.position.y -= lowestBoneY;
+        clonedRoot.updateMatrixWorld(true);
+      }
+
       // Collect cloned bones in consistent order
       const clonedBones = [];
       clonedRoot.traverse(c => { if (c.isBone) clonedBones.push(c); });
@@ -451,28 +465,47 @@ document.getElementById('btn-rig').addEventListener('click', () => {
 
       for (let i = 0; i < vCount; i++) {
         tv.set(posArr[i * 3], posArr[i * 3 + 1], posArr[i * 3 + 2]);
-        // Distance to each bone SEGMENT
-        const ds = skinBones.map(sb => ({
-          idx: sb.idx,
-          d: distToSegment(tv, sb.start, sb.end),
-        })).sort((a, b) => a.d - b.d).slice(0, 4);
+
+        // Distance to each bone SEGMENT, with zone-based bias
+        const ds = skinBones.map(sb => {
+          let d = distToSegment(tv, sb.start, sb.end);
+
+          // ── Fix ③: Zone-based bias to prevent arm↔torso bleeding ──
+          // If vertex is near the midline (|x| < shoulder width * 0.4),
+          // penalize arm/shoulder bones to keep torso clean
+          const absX = Math.abs(tv.x);
+          const isArmBone = sb.name.includes('Shoulder') || sb.name.includes('Arm') ||
+                            sb.name.includes('ForeArm') || sb.name.includes('Hand') ||
+                            sb.name.includes('Thumb') || sb.name.includes('Index') ||
+                            sb.name.includes('Middle') || sb.name.includes('Ring') ||
+                            sb.name.includes('Pinky');
+          const isLegBone = sb.name.includes('UpLeg') || sb.name.includes('Leg') ||
+                            sb.name.includes('Foot') || sb.name.includes('Toe');
+          const isSpineBone = sb.name.includes('Spine') || sb.name.includes('Hips') ||
+                              sb.name.includes('Neck') || sb.name.includes('Head');
+
+          if (isArmBone && absX < 0.15) {
+            d *= 2.5;  // penalize arm bones near midline
+          }
+          // Prevent spine bones from affecting limb vertices too much
+          if (isSpineBone && absX > 0.3 && tv.y > 0.5) {
+            d *= 1.5;
+          }
+
+          return { idx: sb.idx, d, name: sb.name };
+        }).sort((a, b) => a.d - b.d).slice(0, 4);
 
         // TUNABLE PARAMETERS
-        const POWER = 1.5;              // falloff sharpness (1=linear, 2=square, 1.5=balanced)
-        const MIN_NEAREST_WEIGHT = 0.6; // nearest bone always gets at least this much
+        const POWER = 1.5;
+        const MIN_NEAREST_WEIGHT = 0.6;
         const MIN_DIST = 0.005;
 
-        // Compute raw weights with power falloff
         let tw = 0;
         const ws = ds.map(d => { const w = 1 / Math.pow(Math.max(d.d, MIN_DIST), POWER); tw += w; return w; });
-        // Normalize
         for (let j = 0; j < 4; j++) ws[j] /= tw;
 
-        // Clamp: ensure nearest bone gets at least MIN_NEAREST_WEIGHT
         if (ws[0] < MIN_NEAREST_WEIGHT) {
-          const deficit = MIN_NEAREST_WEIGHT - ws[0];
           ws[0] = MIN_NEAREST_WEIGHT;
-          // Redistribute deficit proportionally from other bones
           const otherTotal = ws[1] + ws[2] + ws[3];
           if (otherTotal > 0.001) {
             const scale = (1 - MIN_NEAREST_WEIGHT) / otherTotal;
