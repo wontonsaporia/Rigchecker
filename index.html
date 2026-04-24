@@ -186,20 +186,29 @@ clonedRoot.updateMatrixWorld(true);
 // Adjust leg and arm bone lengths to match marker positions
 const findBone=n=>{let f;clonedRoot.traverse(c=>{if(c.isBone&&c.name===n)f=c});return f};
 const getWP=b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v};
-// LEG ADJUSTMENT: match knee marker and ground
-const FOOT_INSET=0.02; // foot bone slightly above ground
+// LEG ADJUSTMENT: thigh matches knee marker, below-knee scales so ToeBase reaches ground
 ['Left','Right'].forEach(side=>{
   const upLeg=findBone('mixamorig'+side+'UpLeg');
   const leg=findBone('mixamorig'+side+'Leg'); // knee joint
-  const foot=findBone('mixamorig'+side+'Foot');
+  const foot=findBone('mixamorig'+side+'Foot'); // ankle (NOT heel)
+  const toeBase=findBone('mixamorig'+side+'ToeBase');
   const kneeMarker=markers['knees_'+(side==='Left'?'l':'r')];
   if(!upLeg||!leg||!foot||!kneeMarker)return;
-  const curUpLegY=getWP(upLeg).y, curKneeY=getWP(leg).y, curFootY=getWP(foot).y;
-  const curThigh=curUpLegY-curKneeY, curShin=curKneeY-curFootY;
-  const tgtThigh=getWP(upLeg).y-kneeMarker.y; // upLeg to knee marker
-  const tgtShin=kneeMarker.y-FOOT_INSET; // knee marker to ground
+  // THIGH: scale Leg.position.y so knee reaches marker Y
+  const curUpLegY=getWP(upLeg).y, curKneeY=getWP(leg).y;
+  const curThigh=curUpLegY-curKneeY;
+  const tgtThigh=getWP(upLeg).y-kneeMarker.y;
   if(curThigh>0.01){const r=tgtThigh/curThigh;leg.position.y*=r;console.log('[FIT] '+side+' thigh ratio: '+r.toFixed(3))}
-  if(curShin>0.01){const r=tgtShin/curShin;foot.position.y*=r;console.log('[FIT] '+side+' shin ratio: '+r.toFixed(3))}
+  // BELOW-KNEE: scale Foot.position so ToeBase reaches y≈0
+  // Must update world matrices after thigh adjustment
+  clonedRoot.updateMatrixWorld(true);
+  if(toeBase){
+    const curKneeY2=getWP(leg).y;
+    const curToeY=getWP(toeBase).y;
+    const curBelowKnee=curKneeY2-curToeY;
+    const tgtBelowKnee=curKneeY2-0; // knee to ground (y=0)
+    if(curBelowKnee>0.01){const r=tgtBelowKnee/curBelowKnee;foot.position.multiplyScalar(r);console.log('[FIT] '+side+' below-knee ratio: '+r.toFixed(3))}
+  }
 });
 // ARM ADJUSTMENT: match elbow and wrist markers
 ['Left','Right'].forEach(side=>{
