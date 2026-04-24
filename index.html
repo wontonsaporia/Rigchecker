@@ -182,6 +182,48 @@ const modelCenter=modelBox.getCenter(new THREE.Vector3());
 clonedRoot.position.x=0;
 clonedRoot.position.z=modelCenter.z;
 clonedRoot.updateMatrixWorld(true);
+// ── PER-CHAIN PROPORTIONAL ADJUSTMENT ──
+// Adjust leg and arm bone lengths to match marker positions
+const findBone=n=>{let f;clonedRoot.traverse(c=>{if(c.isBone&&c.name===n)f=c});return f};
+const getWP=b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v};
+// LEG ADJUSTMENT: match knee marker and ground
+const FOOT_INSET=0.02; // foot bone slightly above ground
+['Left','Right'].forEach(side=>{
+  const upLeg=findBone('mixamorig'+side+'UpLeg');
+  const leg=findBone('mixamorig'+side+'Leg'); // knee joint
+  const foot=findBone('mixamorig'+side+'Foot');
+  const kneeMarker=markers['knees_'+(side==='Left'?'l':'r')];
+  if(!upLeg||!leg||!foot||!kneeMarker)return;
+  const curUpLegY=getWP(upLeg).y, curKneeY=getWP(leg).y, curFootY=getWP(foot).y;
+  const curThigh=curUpLegY-curKneeY, curShin=curKneeY-curFootY;
+  const tgtThigh=getWP(upLeg).y-kneeMarker.y; // upLeg to knee marker
+  const tgtShin=kneeMarker.y-FOOT_INSET; // knee marker to ground
+  if(curThigh>0.01){const r=tgtThigh/curThigh;leg.position.y*=r;console.log('[FIT] '+side+' thigh ratio: '+r.toFixed(3))}
+  if(curShin>0.01){const r=tgtShin/curShin;foot.position.y*=r;console.log('[FIT] '+side+' shin ratio: '+r.toFixed(3))}
+});
+// ARM ADJUSTMENT: match elbow and wrist markers
+['Left','Right'].forEach(side=>{
+  const arm=findBone('mixamorig'+side+'Arm'); // upper arm
+  const foreArm=findBone('mixamorig'+side+'ForeArm'); // elbow
+  const hand=findBone('mixamorig'+side+'Hand');
+  const elbowMarker=markers['elbows_'+(side==='Left'?'l':'r')];
+  const wristMarker=markers['wrists_'+(side==='Left'?'l':'r')];
+  if(!arm||!foreArm||!hand)return;
+  if(elbowMarker){
+    const curArmWP=getWP(arm), curElbowWP=getWP(foreArm);
+    const curUpperLen=curArmWP.distanceTo(curElbowWP);
+    const tgtUpperLen=getWP(arm).distanceTo(elbowMarker);
+    if(curUpperLen>0.01){const r=tgtUpperLen/curUpperLen;foreArm.position.multiplyScalar(r);console.log('[FIT] '+side+' upperArm ratio: '+r.toFixed(3))}
+  }
+  if(wristMarker&&elbowMarker){
+    const curElbowWP=getWP(foreArm), curHandWP=getWP(hand);
+    const curForeLen=curElbowWP.distanceTo(curHandWP);
+    const tgtForeLen=elbowMarker.distanceTo(wristMarker);
+    if(curForeLen>0.01){const r=tgtForeLen/curForeLen;hand.position.multiplyScalar(r);console.log('[FIT] '+side+' foreArm ratio: '+r.toFixed(3))}
+  }
+});
+clonedRoot.updateMatrixWorld(true);
+console.log('[FIT] Per-chain adjustment complete');
 const clonedBones=[];clonedRoot.traverse(c=>{if(c.isBone)clonedBones.push(c)});const bwp=clonedBones.map(b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v});const skeleton=new THREE.Skeleton(clonedBones);
 userModel.updateMatrixWorld(true);const geos=[];userModel.traverse(c=>{if(c.isMesh&&c.geometry){const g=c.geometry.clone();g.applyMatrix4(c.matrixWorld);if(!g.attributes.normal)g.computeVertexNormals();geos.push(g)}});
 let totalV=0,totalI=0;for(const g of geos){totalV+=g.attributes.position.count;if(g.index)totalI+=g.index.count}const posArr=new Float32Array(totalV*3),nrmArr=new Float32Array(totalV*3);const idxArr=totalI>0?new Uint32Array(totalI):null;let vo=0,io=0,vertOff=0;for(const g of geos){const p=g.attributes.position;for(let i=0;i<p.count*3;i++)posArr[vo+i]=p.array[i];if(g.attributes.normal){const n=g.attributes.normal;for(let i=0;i<n.count*3;i++)nrmArr[vo+i]=n.array[i]}if(g.index&&idxArr){for(let i=0;i<g.index.count;i++)idxArr[io+i]=g.index.array[i]+vertOff;io+=g.index.count}vertOff+=p.count;vo+=p.count*3}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(posArr,3));geo.setAttribute('normal',new THREE.BufferAttribute(nrmArr,3));if(idxArr)geo.setIndex(new THREE.BufferAttribute(idxArr,1));
