@@ -243,20 +243,30 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
     console.log('[FIT] '+side+' shoulder Y-adjust: '+yDiff.toFixed(4));
     clonedRoot.updateMatrixWorld(true);
   }
-  // UPPER ARM X: scale to match elbow
+  // UPPER ARM: X scale + Y slope to match elbow marker
   if(elbowMarker){
     const curArmWP=getWP(arm),curElbowWP=getWP(foreArm);
     const curUpperLen=Math.abs(curElbowWP.x-curArmWP.x);
     const tgtUpperLen=Math.abs(elbowMarker.x-curArmWP.x);
     if(curUpperLen>0.01){foreArm.position.x*=tgtUpperLen/curUpperLen;console.log('[FIT] '+side+' upperArm X-ratio: '+(tgtUpperLen/curUpperLen).toFixed(3))}
+    // Y slope: match elbow marker height
+    clonedRoot.updateMatrixWorld(true);
+    const elbowYDiff=elbowMarker.y-getWP(foreArm).y;
+    foreArm.position.y+=elbowYDiff;
+    console.log('[FIT] '+side+' elbow Y-slope: '+elbowYDiff.toFixed(4));
   }
   clonedRoot.updateMatrixWorld(true);
-  // FOREARM X: scale to match wrist
-  if(wristMarker&&elbowMarker){
+  // FOREARM: X scale + Y slope to match wrist marker
+  if(wristMarker){
     const curElbowWP=getWP(foreArm),curHandWP=getWP(hand);
     const curForeLen=Math.abs(curHandWP.x-curElbowWP.x);
     const tgtForeLen=Math.abs(wristMarker.x-curElbowWP.x);
     if(curForeLen>0.01){hand.position.x*=tgtForeLen/curForeLen;console.log('[FIT] '+side+' foreArm X-ratio: '+(tgtForeLen/curForeLen).toFixed(3))}
+    // Y slope: match wrist marker height
+    clonedRoot.updateMatrixWorld(true);
+    const wristYDiff=wristMarker.y-getWP(hand).y;
+    hand.position.y+=wristYDiff;
+    console.log('[FIT] '+side+' wrist Y-slope: '+wristYDiff.toFixed(4));
   }
 });
 clonedRoot.updateMatrixWorld(true);
