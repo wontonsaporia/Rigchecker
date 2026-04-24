@@ -234,13 +234,14 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
   const elbowMarker=markers['elbows_'+(side==='Left'?'l':'r')];
   const wristMarker=markers['wrists_'+(side==='Left'?'l':'r')];
   if(!arm||!foreArm||!hand)return;
-  // SHOULDER Y: adjust shoulder bone Y to match marker
+  // SHOULDER: move shoulder bone to marker position (starting point of arm chain)
   if(shoulderMarker&&shoulder){
     clonedRoot.updateMatrixWorld(true);
-    const curShoulderWP=getWP(shoulder);
-    const yDiff=shoulderMarker.y-curShoulderWP.y;
-    shoulder.position.y+=yDiff;
-    console.log('[FIT] '+side+' shoulder Y-adjust: '+yDiff.toFixed(4));
+    const cur=getWP(shoulder);
+    shoulder.position.x+=(shoulderMarker.x-cur.x);
+    shoulder.position.y+=(shoulderMarker.y-cur.y);
+    shoulder.position.z+=(shoulderMarker.z-cur.z);
+    console.log('[FIT] '+side+' shoulder → marker: ('+shoulderMarker.x.toFixed(3)+', '+shoulderMarker.y.toFixed(3)+', '+shoulderMarker.z.toFixed(3)+')');
     clonedRoot.updateMatrixWorld(true);
   }
   // UPPER ARM: X scale + Y slope to match elbow marker
@@ -280,7 +281,13 @@ const CM={mixamorigHips:'mixamorigSpine',mixamorigSpine:'mixamorigSpine1',mixamo
 const allBWP={};clonedBones.forEach((b,i)=>{allBWP[b.name]=bwp[i]});const skinBones=[];clonedBones.forEach((b,idx)=>{if(!SB.has(b.name))return;const start=bwp[idx],cn=CM[b.name];let end;if(cn&&allBWP[cn]){end=allBWP[cn]}else{const p=b.parent;if(p?.isBone){const pp=new THREE.Vector3();p.getWorldPosition(pp);end=start.clone().add(start.clone().sub(pp).normalize().multiplyScalar(0.05))}else{end=start.clone()}}skinBones.push({idx,start,end,name:b.name})});
 const _ab=new THREE.Vector3(),_ap=new THREE.Vector3(),_cl=new THREE.Vector3();function dTS(pt,s,e){_ab.copy(e).sub(s);_ap.copy(pt).sub(s);const l2=_ab.dot(_ab);if(l2<0.00001)return pt.distanceTo(s);const t=Math.max(0,Math.min(1,_ap.dot(_ab)/l2));_cl.copy(s).addScaledVector(_ab,t);return pt.distanceTo(_cl)}
 const vCount=posArr.length/3,si=new Uint16Array(vCount*4),sw=new Float32Array(vCount*4),tv=new THREE.Vector3();
-for(let i=0;i<vCount;i++){tv.set(posArr[i*3],posArr[i*3+1],posArr[i*3+2]);const ds=skinBones.map(sb=>{let d=dTS(tv,sb.start,sb.end);const ax=Math.abs(tv.x);const isArm=sb.name.includes('Shoulder')||sb.name.includes('Arm')||sb.name.includes('ForeArm')||sb.name.includes('Hand')||sb.name.includes('Thumb')||sb.name.includes('Index')||sb.name.includes('Middle')||sb.name.includes('Ring')||sb.name.includes('Pinky');const isSpine=sb.name.includes('Spine')||sb.name.includes('Hips')||sb.name.includes('Neck')||sb.name.includes('Head');if(isArm&&ax<0.15)d*=2.5;if(isSpine&&ax>0.3&&tv.y>0.5)d*=1.5;return{idx:sb.idx,d}}).sort((a,b)=>a.d-b.d).slice(0,4);const POW=1.5,MNW=0.6,MD=0.005;let tw=0;const ws=ds.map(d=>{const w=1/Math.pow(Math.max(d.d,MD),POW);tw+=w;return w});for(let j=0;j<4;j++)ws[j]/=tw;if(ws[0]<MNW){ws[0]=MNW;const ot=ws[1]+ws[2]+ws[3];if(ot>0.001){const sc=(1-MNW)/ot;ws[1]*=sc;ws[2]*=sc;ws[3]*=sc}}for(let j=0;j<4;j++){si[i*4+j]=ds[j].idx;sw[i*4+j]=ws[j]}}
+const shoulderCutoffX=markers.shoulders_l?Math.abs(markers.shoulders_l.x):0.15;
+console.log('[SKIN] Arm cutoff X: '+shoulderCutoffX.toFixed(3));
+for(let i=0;i<vCount;i++){tv.set(posArr[i*3],posArr[i*3+1],posArr[i*3+2]);const ds=skinBones.map(sb=>{let d=dTS(tv,sb.start,sb.end);const ax=Math.abs(tv.x);const isArm=sb.name.includes('Shoulder')||sb.name.includes('Arm')||sb.name.includes('ForeArm')||sb.name.includes('Hand')||sb.name.includes('Thumb')||sb.name.includes('Index')||sb.name.includes('Middle')||sb.name.includes('Ring')||sb.name.includes('Pinky');const isSpine=sb.name.includes('Spine')||sb.name.includes('Hips')||sb.name.includes('Neck')||sb.name.includes('Head');
+// HARD BOUNDARY: arm bones cannot influence vertices inside shoulder line
+if(isArm&&ax<shoulderCutoffX)d=99999;
+if(isSpine&&ax>shoulderCutoffX*1.5&&tv.y>0.5)d*=1.5;
+return{idx:sb.idx,d}}).sort((a,b)=>a.d-b.d).slice(0,4);const POW=1.5,MNW=0.6,MD=0.005;let tw=0;const ws=ds.map(d=>{const w=1/Math.pow(Math.max(d.d,MD),POW);tw+=w;return w});for(let j=0;j<4;j++)ws[j]/=tw;if(ws[0]<MNW){ws[0]=MNW;const ot=ws[1]+ws[2]+ws[3];if(ot>0.001){const sc=(1-MNW)/ot;ws[1]*=sc;ws[2]*=sc;ws[3]*=sc}}for(let j=0;j<4;j++){si[i*4+j]=ds[j].idx;sw[i*4+j]=ws[j]}}
 geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(si,4));geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(sw,4));
 const mat=new THREE.MeshStandardMaterial({color:0x8888aa,roughness:0.6,metalness:0.1,side:THREE.DoubleSide});skinnedMesh=new THREE.SkinnedMesh(geo,mat);skinnedMesh.add(clonedRoot);skinnedMesh.bind(skeleton);
 const hipsBone=skeleton.bones.find(b=>b.name==='mixamorigHips');if(hipsBone)originalBindHipsPos=hipsBone.position.clone();
