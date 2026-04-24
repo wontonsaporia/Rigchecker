@@ -241,7 +241,9 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
     shoulder.position.x+=(shoulderMarker.x-cur.x);
     shoulder.position.y+=(shoulderMarker.y-cur.y);
     shoulder.position.z+=(shoulderMarker.z-cur.z);
-    console.log('[FIT] '+side+' shoulder → marker: ('+shoulderMarker.x.toFixed(3)+', '+shoulderMarker.y.toFixed(3)+', '+shoulderMarker.z.toFixed(3)+')');
+    // HALVE shoulder rig length (Shoulder→Arm distance)
+    arm.position.multiplyScalar(0.5);
+    console.log('[FIT] '+side+' shoulder → marker, length halved');
     clonedRoot.updateMatrixWorld(true);
   }
   // UPPER ARM: X scale + Y slope to match elbow marker
@@ -250,24 +252,44 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
     const curUpperLen=Math.abs(curElbowWP.x-curArmWP.x);
     const tgtUpperLen=Math.abs(elbowMarker.x-curArmWP.x);
     if(curUpperLen>0.01){foreArm.position.x*=tgtUpperLen/curUpperLen;console.log('[FIT] '+side+' upperArm X-ratio: '+(tgtUpperLen/curUpperLen).toFixed(3))}
-    // Y slope: match elbow marker height
     clonedRoot.updateMatrixWorld(true);
     const elbowYDiff=elbowMarker.y-getWP(foreArm).y;
     foreArm.position.y+=elbowYDiff;
     console.log('[FIT] '+side+' elbow Y-slope: '+elbowYDiff.toFixed(4));
   }
   clonedRoot.updateMatrixWorld(true);
-  // FOREARM: X scale + Y slope to match wrist marker
+  // HAND: position directly at wrist marker
   if(wristMarker){
-    const curElbowWP=getWP(foreArm),curHandWP=getWP(hand);
-    const curForeLen=Math.abs(curHandWP.x-curElbowWP.x);
-    const tgtForeLen=Math.abs(wristMarker.x-curElbowWP.x);
-    if(curForeLen>0.01){hand.position.x*=tgtForeLen/curForeLen;console.log('[FIT] '+side+' foreArm X-ratio: '+(tgtForeLen/curForeLen).toFixed(3))}
-    // Y slope: match wrist marker height
     clonedRoot.updateMatrixWorld(true);
-    const wristYDiff=wristMarker.y-getWP(hand).y;
-    hand.position.y+=wristYDiff;
-    console.log('[FIT] '+side+' wrist Y-slope: '+wristYDiff.toFixed(4));
+    const curHandWP=getWP(hand);
+    hand.position.x+=(wristMarker.x-curHandWP.x);
+    hand.position.y+=(wristMarker.y-curHandWP.y);
+    hand.position.z+=(wristMarker.z-curHandWP.z);
+    console.log('[FIT] '+side+' hand → wrist marker');
+    // FINGERS: extend to mesh edge using raycast
+    clonedRoot.updateMatrixWorld(true);
+    const handWP=getWP(hand);
+    const outDir=new THREE.Vector3(side==='Left'?-1:1,0,0); // outward from body
+    const _frc=new THREE.Raycaster();
+    _frc.set(handWP,outDir);
+    const fHits=_frc.intersectObjects(userMeshes,true);
+    if(fHits.length>0){
+      const meshEdge=fHits[0].point;
+      const fingerReach=Math.abs(meshEdge.x-handWP.x);
+      // Get current finger length (hand to middle finger tip)
+      const mid3=findBone('mixamorig'+side+'HandMiddle3');
+      if(mid3){
+        const mid3End=findBone('mixamorig'+side+'HandMiddle4')||mid3;
+        const mid3WP=getWP(mid3End!==mid3?mid3End:mid3);
+        const curFingerLen=Math.abs(mid3WP.x-handWP.x);
+        if(curFingerLen>0.005){
+          const fingerScale=fingerReach/curFingerLen;
+          // Scale all finger bones from Hand
+          hand.children.forEach(child=>{if(child.isBone)child.position.multiplyScalar(fingerScale)});
+          console.log('[FIT] '+side+' fingers scaled: '+fingerScale.toFixed(3)+' (reach: '+fingerReach.toFixed(4)+')');
+        }
+      }
+    }
   }
 });
 clonedRoot.updateMatrixWorld(true);
