@@ -162,7 +162,26 @@ function onTap(e){if(step!=='markers'||mkStep>=MK_ORDER.length||!userMeshes.leng
 let tapSt=null;renderer.domElement.addEventListener('pointerdown',e=>{tapSt={x:e.clientX,y:e.clientY,t:Date.now()}});renderer.domElement.addEventListener('pointerup',e=>{if(!tapSt)return;if(Math.hypot(e.clientX-tapSt.x,e.clientY-tapSt.y)<8&&Date.now()-tapSt.t<300)onTap(e);tapSt=null});
 $('sym').addEventListener('change',e=>{useSym=e.target.checked});
 // Rig Generation (B-plan)
-$('b-rig').addEventListener('click',()=>{if(!refData||!userModel)return;showLoad('リグを生成中...');setTimeout(()=>{try{const modelBox=new THREE.Box3().setFromObject(userModel),modelH=modelBox.getSize(new THREE.Vector3()).y;fitScale=modelH/refData.totalHeight;const refFeetY=refData.minY*fitScale;fitYOffset=-refFeetY;const clonedRoot=refData.rootBone.clone(true);clonedRoot.position.multiplyScalar(fitScale);clonedRoot.traverse(c=>{if(c.isBone&&c!==clonedRoot)c.position.multiplyScalar(fitScale)});clonedRoot.position.y+=fitYOffset;const modelCenter=modelBox.getCenter(new THREE.Vector3());clonedRoot.position.z=modelCenter.z;clonedRoot.updateMatrixWorld(true);let lowestBY=Infinity;clonedRoot.traverse(c=>{if(c.isBone){const wp=new THREE.Vector3();c.getWorldPosition(wp);if(wp.y<lowestBY)lowestBY=wp.y}});const footInset=modelH*0.02;clonedRoot.position.y+=(footInset-lowestBY);clonedRoot.updateMatrixWorld(true);
+$('b-rig').addEventListener('click',()=>{if(!refData||!userModel)return;showLoad('リグを生成中...');setTimeout(()=>{try{const modelBox=new THREE.Box3().setFromObject(userModel),modelH=modelBox.getSize(new THREE.Vector3()).y;
+// ── MARKER-BASED FITTING ──
+// Compute reference Hips-to-Head distance (cm)
+let refHeadY=refData.hipsY,refHipsY=refData.hipsY;
+refData.bones.forEach(b=>{if(b.name==='mixamorigHead'){const wp=new THREE.Vector3();b.getWorldPosition(wp);refHeadY=wp.y}});
+const refSpineH=refHeadY-refHipsY; // reference chin-to-groin in cm
+// User's chin-to-groin from markers (normalized coords)
+const userSpineH=markers.chin?markers.chin.y-(markers.groin?markers.groin.y:0):modelH*0.5;
+fitScale=userSpineH/refSpineH;
+console.log('[FIT] marker-based: userSpineH='+userSpineH.toFixed(4)+', refSpineH='+refSpineH.toFixed(2)+', fitScale='+fitScale.toFixed(6));
+// Clone and scale skeleton
+const clonedRoot=refData.rootBone.clone(true);clonedRoot.position.multiplyScalar(fitScale);clonedRoot.traverse(c=>{if(c.isBone&&c!==clonedRoot)c.position.multiplyScalar(fitScale)});
+// Position Hips at groin marker
+const groinY=markers.groin?markers.groin.y:modelH*0.45;
+const scaledHipsY=refData.hipsY*fitScale;
+clonedRoot.position.y=groinY; // Hips directly at groin marker
+const modelCenter=modelBox.getCenter(new THREE.Vector3());
+clonedRoot.position.x=0;
+clonedRoot.position.z=modelCenter.z;
+clonedRoot.updateMatrixWorld(true);
 const clonedBones=[];clonedRoot.traverse(c=>{if(c.isBone)clonedBones.push(c)});const bwp=clonedBones.map(b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v});const skeleton=new THREE.Skeleton(clonedBones);
 userModel.updateMatrixWorld(true);const geos=[];userModel.traverse(c=>{if(c.isMesh&&c.geometry){const g=c.geometry.clone();g.applyMatrix4(c.matrixWorld);if(!g.attributes.normal)g.computeVertexNormals();geos.push(g)}});
 let totalV=0,totalI=0;for(const g of geos){totalV+=g.attributes.position.count;if(g.index)totalI+=g.index.count}const posArr=new Float32Array(totalV*3),nrmArr=new Float32Array(totalV*3);const idxArr=totalI>0?new Uint32Array(totalI):null;let vo=0,io=0,vertOff=0;for(const g of geos){const p=g.attributes.position;for(let i=0;i<p.count*3;i++)posArr[vo+i]=p.array[i];if(g.attributes.normal){const n=g.attributes.normal;for(let i=0;i<n.count*3;i++)nrmArr[vo+i]=n.array[i]}if(g.index&&idxArr){for(let i=0;i<g.index.count;i++)idxArr[io+i]=g.index.array[i]+vertOff;io+=g.index.count}vertOff+=p.count;vo+=p.count*3}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(posArr,3));geo.setAttribute('normal',new THREE.BufferAttribute(nrmArr,3));if(idxArr)geo.setIndex(new THREE.BufferAttribute(idxArr,1));
