@@ -40,7 +40,7 @@
   .mk-dot{width:18px;height:18px;border-radius:50%;border:2.5px solid currentColor;flex-shrink:0;display:flex;align-items:center;justify-content:center}
   .mk-dot.filled::after{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}
   .mk-st{margin-left:auto;font-size:10px;font-weight:400;color:var(--text2)}
-  .c-chin{color:var(--blue)}.c-wri{color:var(--yellow)}.c-fng{color:#f9a825}.c-elb{color:var(--orange)}.c-sho{color:#45d1a0}.c-kne{color:var(--purple)}.c-wst{color:#ff9ff3}.c-gro{color:var(--accent)}
+  .c-chin{color:var(--blue)}.c-wri{color:var(--yellow)}.c-fng{color:#f9a825}.c-elb{color:var(--orange)}.c-sho{color:#45d1a0}.c-kne{color:var(--purple)}.c-wst{color:#ff9ff3}.c-gro{color:var(--accent)}.c-hel{color:#ff7675}
   .sym{display:flex;align-items:center;gap:8px;padding:12px 16px;font-size:12px;border-top:1px solid rgba(255,255,255,.06);margin-top:8px}
   .sym input{accent-color:var(--green);width:16px;height:16px}
   .btw{padding:12px 16px;margin-top:auto}
@@ -66,7 +66,7 @@
 </style>
 </head>
 <body>
-<div class="hdr"><div class="logo">RIGCHECKER <span>v1.4</span></div><div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div></div>
+<div class="hdr"><div class="logo">RIGCHECKER <span>v1.3</span></div><div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div></div>
 <div class="main">
   <div id="cv"></div>
   <div class="guide" id="guide"></div>
@@ -84,6 +84,7 @@
       <div class="mk c-kne" data-k="knees"><div class="mk-dot"></div><span>KNEES</span><span class="mk-st"></span></div>
       <div class="mk c-wst" data-k="waist"><div class="mk-dot"></div><span>WAIST</span><span class="mk-st"></span></div>
       <div class="mk c-gro" data-k="groin"><div class="mk-dot"></div><span>GROIN</span><span class="mk-st"></span></div>
+      <div class="mk c-hel" data-k="heels"><div class="mk-dot"></div><span>HEELS</span><span class="mk-st"></span></div>
     </div>
     <div class="sym"><input type="checkbox" id="sym" checked><label for="sym">Use Symmetry</label></div>
     <div class="btw"><button class="btn-back" id="b-back1">BACK</button><button class="btn-main" id="b-rig" disabled>リグ生成</button></div>
@@ -128,9 +129,9 @@ window.addEventListener('resize',onResize);
 // State
 let refData=null,userModel=null,userMeshes=[],skinnedMesh=null,skelHelper=null,mixer=null,currentAction=null,fitScale=1,fitYOffset=0,originalBindHipsPos=new THREE.Vector3(0,1,0),animPaused=false,step='upload',boneLabels=[];
 const animClips={};
-const MK_ORDER=['chin','wrists','fingertips','elbows','shoulders','knees','waist','groin'];
-const MK_COLORS={chin:0x45b7d1,wrists:0xf9ca24,fingertips:0xf9a825,elbows:0xf0932b,shoulders:0x45d1a0,knees:0xa29bfe,waist:0xff9ff3,groin:0xe94560};
-const MK_GUIDES={chin:'あご をタップ',wrists:'手首 をタップ（片側）',fingertips:'人差し指の先 をタップ（片側）',elbows:'ひじ をタップ（片側）',shoulders:'肩 をタップ（片側）',knees:'ひざ をタップ（片側）',waist:'脚の付け根 をタップ（片側）',groin:'鼠径部 をタップ'};
+const MK_ORDER=['chin','wrists','fingertips','elbows','shoulders','knees','waist','groin','heels'];
+const MK_COLORS={chin:0x45b7d1,wrists:0xf9ca24,fingertips:0xf9a825,elbows:0xf0932b,shoulders:0x45d1a0,knees:0xa29bfe,waist:0xff9ff3,groin:0xe94560,heels:0xff7675};
+const MK_GUIDES={chin:'あご をタップ',wrists:'手首 をタップ（片側）',fingertips:'人差し指の先 をタップ（片側）',elbows:'ひじ をタップ（片側）',shoulders:'肩 をタップ（片側）',knees:'ひざ をタップ（片側）',waist:'脚の付け根 をタップ（片側）',groin:'鼠径部 をタップ',heels:'横から踵 をタップ'};
 let mkStep=0,markers={},mkSpheres=[],useSym=true;
 // UI
 const $=id=>document.getElementById(id);
@@ -167,11 +168,21 @@ const idx=c.geometry.index;pc+=idx?idx.count/3:c.geometry.attributes.position.co
 if(ext==='glb'||ext==='gltf'){import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>{new GLTFLoader().parse(e.target.result,'',g=>onParsed(g.scene),err=>{hideLoad();alert('GLB error: '+err.message)})})}else{onParsed(new FBXLoader().parse(e.target.result))}}catch(err){hideLoad();alert('読み込みに失敗:\n'+err.message);console.error(err)}};reader.readAsArrayBuffer(file)}
 // Markers
 function resetMarkers(){mkStep=0;markers={};mkSpheres.forEach(s=>scene.remove(s));mkSpheres=[];updateMarkerUI();$('b-rig').disabled=true}
-function updateMarkerUI(){const cur=MK_ORDER[mkStep];document.querySelectorAll('.mk').forEach(el=>{const k=el.dataset.k,dot=el.querySelector('.mk-dot'),st=el.querySelector('.mk-st');el.classList.remove('cur','done');dot.classList.remove('filled');if(k===cur&&mkStep<MK_ORDER.length){el.classList.add('cur');st.textContent='— タップ'}const placed=k==='chin'||k==='groin'?markers[k]:markers[k+'_l'];if(placed){el.classList.add('done');dot.classList.add('filled');st.textContent='✓'}})}
+function updateMarkerUI(){const cur=MK_ORDER[mkStep];document.querySelectorAll('.mk').forEach(el=>{const k=el.dataset.k,dot=el.querySelector('.mk-dot'),st=el.querySelector('.mk-st');el.classList.remove('cur','done');dot.classList.remove('filled');if(k===cur&&mkStep<MK_ORDER.length){el.classList.add('cur');st.textContent='— タップ'}const placed=k==='chin'||k==='groin'||k==='heels'?markers[k]:markers[k+'_l'];if(placed){el.classList.add('done');dot.classList.add('filled');st.textContent='✓'}})}
 function addMkSphere(pos,col){const s=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshBasicMaterial({color:col,depthTest:false}));s.position.copy(pos);s.renderOrder=999;scene.add(s);mkSpheres.push(s)}
-function onTap(e){if(step!=='markers'||mkStep>=MK_ORDER.length||!userMeshes.length)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-rect.left)/rect.width)*2-1;pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(userMeshes,true);if(!hits.length)return;const pt=hits[0].point,key=MK_ORDER[mkStep],col=MK_COLORS[key];if(key==='chin'||key==='groin'){const snap=pt.clone();snap.x=0;markers[key]=snap;addMkSphere(snap,col)}else{markers[key+'_l']=pt.clone();addMkSphere(pt,col);if(useSym){const m=pt.clone();m.x=-m.x;markers[key+'_r']=m;addMkSphere(m,col)}}mkStep++;updateMarkerUI();
+function onTap(e){if(step!=='markers'||mkStep>=MK_ORDER.length||!userMeshes.length)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-rect.left)/rect.width)*2-1;pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(userMeshes,true);if(!hits.length)return;const pt=hits[0].point,key=MK_ORDER[mkStep],col=MK_COLORS[key];if(key==='chin'||key==='groin'||key==='heels'){const snap=pt.clone();snap.x=0;markers[key]=snap;addMkSphere(snap,col)}else{markers[key+'_l']=pt.clone();addMkSphere(pt,col);if(useSym){const m=pt.clone();m.x=-m.x;markers[key+'_r']=m;addMkSphere(m,col)}}mkStep++;updateMarkerUI();
 if(mkStep<MK_ORDER.length){
   showGuide(MK_GUIDES[MK_ORDER[mkStep]]);
+  // Auto switch to side view for heels marker
+  if(MK_ORDER[mkStep]==='heels'&&userModel){
+    const box=new THREE.Box3().setFromObject(userModel);
+    const sz=box.getSize(new THREE.Vector3());
+    const ctr=box.getCenter(new THREE.Vector3());
+    orthoCam.position.set(sz.y*2, ctr.y*0.3, 0);
+    controls.target.set(0, ctr.y*0.3, 0);
+    controls.update();
+    showGuide('横から踵をタップしてください');
+  }
 }else{showGuide('「リグ生成」をタップ');$('b-rig').disabled=!refData}}
 let tapSt=null;renderer.domElement.addEventListener('pointerdown',e=>{tapSt={x:e.clientX,y:e.clientY,t:Date.now()}});renderer.domElement.addEventListener('pointerup',e=>{if(!tapSt)return;if(Math.hypot(e.clientX-tapSt.x,e.clientY-tapSt.y)<8&&Date.now()-tapSt.t<300)onTap(e);tapSt=null});
 $('sym').addEventListener('change',e=>{useSym=e.target.checked});
@@ -226,6 +237,19 @@ const getWP=b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v};
 });
 clonedRoot.updateMatrixWorld(true);
 console.log('[FIT] Leg adjustment complete');
+// HEELS: adjust entire rig Y position so heel touches ground
+// This ONLY shifts the whole skeleton down, preserving all bone angles
+if(markers.heels){
+  const heelY=markers.heels.y;
+  // Find current lowest bone Y
+  let lowestY=Infinity;
+  clonedRoot.traverse(c=>{if(c.isBone){const wp=new THREE.Vector3();c.getWorldPosition(wp);if(wp.y<lowestY)lowestY=wp.y}});
+  // Shift entire rig so lowest bone aligns with heel marker Y
+  const yShift=heelY-lowestY;
+  clonedRoot.position.y+=yShift;
+  clonedRoot.updateMatrixWorld(true);
+  console.log('[FIT] Heels: shifted rig Y by '+yShift.toFixed(4)+' (heel marker Y='+heelY.toFixed(4)+', lowest bone was '+lowestY.toFixed(4)+')');
+}
 // ARM ADJUSTMENT: using proper world→local coordinate conversion
 // Helper: set bone world position by converting through parent's inverse matrix
 function setWorldPos(bone, targetWP) {
