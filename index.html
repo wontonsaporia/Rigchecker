@@ -267,15 +267,15 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
     console.log('[FIT] '+side+' elbow Y-slope: '+elbowYDiff.toFixed(4));
   }
   clonedRoot.updateMatrixWorld(true);
-  // HAND: position directly at wrist marker
+  // HAND: position at wrist marker (X and Y only, keep Z from reference)
   if(wristMarker){
     clonedRoot.updateMatrixWorld(true);
     const curHandWP=getWP(hand);
     hand.position.x+=(wristMarker.x-curHandWP.x);
     hand.position.y+=(wristMarker.y-curHandWP.y);
-    hand.position.z+=(wristMarker.z-curHandWP.z);
-    console.log('[FIT] '+side+' hand → wrist marker');
-    // FINGERS: scale to reach fingertip marker
+    // Z intentionally NOT adjusted (marker is on surface, bone should stay inside)
+    console.log('[FIT] '+side+' hand → wrist marker (XY only)');
+    // FINGERS: scale X position only to reach fingertip marker
     clonedRoot.updateMatrixWorld(true);
     const handWP=getWP(hand);
     const fingertipMarker=markers['fingertips_'+(side==='Left'?'l':'r')];
@@ -287,8 +287,8 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
         const curFingerLen=Math.abs(idx3WP.x-handWP.x);
         if(curFingerLen>0.005){
           const fingerScale=fingerReach/curFingerLen;
-          hand.children.forEach(child=>{if(child.isBone)child.position.multiplyScalar(fingerScale)});
-          console.log('[FIT] '+side+' fingers scaled (Index): '+fingerScale.toFixed(3));
+          hand.children.forEach(child=>{if(child.isBone)child.position.x*=fingerScale});
+          console.log('[FIT] '+side+' fingers X-scaled (Index): '+fingerScale.toFixed(3));
         }
       }
     }
