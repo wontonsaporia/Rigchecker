@@ -66,7 +66,7 @@
 </style>
 </head>
 <body>
-<div class="hdr"><div class="logo">RIGCHECKER <span>v1.2</span></div><div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div></div>
+<div class="hdr"><div class="logo">RIGCHECKER <span>v1.3</span></div><div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div></div>
 <div class="main">
   <div id="cv"></div>
   <div class="guide" id="guide"></div>
@@ -233,7 +233,13 @@ const getWP=b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v};
 const RIG_Z_OFFSET=-0.025;
 clonedRoot.position.z+=RIG_Z_OFFSET;
 console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
-// ARM ADJUSTMENT: shoulder marker for Y position, X-axis scaling for length
+// ARM ADJUSTMENT: using proper world→local coordinate conversion
+// Helper: set bone world position by converting through parent's inverse matrix
+function setWorldPos(bone, targetWP) {
+  bone.parent.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(bone.parent.matrixWorld).invert();
+  bone.position.copy(targetWP.clone().applyMatrix4(inv));
+}
 ['Left','Right'].forEach(side=>{
   const shoulder=findBone('mixamorig'+side+'Shoulder');
   const arm=findBone('mixamorig'+side+'Arm');
@@ -243,52 +249,59 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
   const elbowMarker=markers['elbows_'+(side==='Left'?'l':'r')];
   const wristMarker=markers['wrists_'+(side==='Left'?'l':'r')];
   if(!arm||!foreArm||!hand)return;
-  // SHOULDER: move shoulder bone to marker position (starting point of arm chain)
+
+  // 1. SHOULDER: move to marker position (XY only, keep Z)
   if(shoulderMarker&&shoulder){
     clonedRoot.updateMatrixWorld(true);
-    const cur=getWP(shoulder);
-    shoulder.position.x+=(shoulderMarker.x-cur.x);
-    shoulder.position.y+=(shoulderMarker.y-cur.y);
-    shoulder.position.z+=(shoulderMarker.z-cur.z);
-    // HALVE shoulder rig length (Shoulder→Arm distance)
-    arm.position.multiplyScalar(0.5);
-    console.log('[FIT] '+side+' shoulder → marker, length halved');
+    const curWP=getWP(shoulder);
+    const targetWP=new THREE.Vector3(shoulderMarker.x, shoulderMarker.y, curWP.z);
+    setWorldPos(shoulder, targetWP);
     clonedRoot.updateMatrixWorld(true);
+    console.log('[FIT] '+side+' shoulder → ('+targetWP.x.toFixed(3)+', '+targetWP.y.toFixed(3)+')');
+
+    // 2. ARM: place between shoulder and arm (halve shoulder length)
+    const shoulderWP=getWP(shoulder);
+    const armWP=getWP(arm);
+    const midWP=new THREE.Vector3().lerpVectors(shoulderWP, armWP, 0.5);
+    setWorldPos(arm, midWP);
+    clonedRoot.updateMatrixWorld(true);
+    console.log('[FIT] '+side+' arm: shoulder length halved');
   }
-  // UPPER ARM: X scale + Y slope to match elbow marker
+
+  // 3. FOREARM (elbow): move to elbow marker (XY only, keep Z)
   if(elbowMarker){
-    const curArmWP=getWP(arm),curElbowWP=getWP(foreArm);
-    const curUpperLen=Math.abs(curElbowWP.x-curArmWP.x);
-    const tgtUpperLen=Math.abs(elbowMarker.x-curArmWP.x);
-    if(curUpperLen>0.01){foreArm.position.x*=tgtUpperLen/curUpperLen;console.log('[FIT] '+side+' upperArm X-ratio: '+(tgtUpperLen/curUpperLen).toFixed(3))}
     clonedRoot.updateMatrixWorld(true);
-    const elbowYDiff=elbowMarker.y-getWP(foreArm).y;
-    foreArm.position.y+=elbowYDiff;
-    console.log('[FIT] '+side+' elbow Y-slope: '+elbowYDiff.toFixed(4));
+    const curWP=getWP(foreArm);
+    const targetWP=new THREE.Vector3(elbowMarker.x, elbowMarker.y, curWP.z);
+    setWorldPos(foreArm, targetWP);
+    clonedRoot.updateMatrixWorld(true);
+    console.log('[FIT] '+side+' foreArm → elbow marker');
   }
-  clonedRoot.updateMatrixWorld(true);
-  // HAND: position at wrist marker (X and Y only, keep Z from reference)
+
+  // 4. HAND: move to wrist marker (XY only, keep Z)
   if(wristMarker){
     clonedRoot.updateMatrixWorld(true);
-    const curHandWP=getWP(hand);
-    hand.position.x+=(wristMarker.x-curHandWP.x);
-    hand.position.y+=(wristMarker.y-curHandWP.y);
-    // Z intentionally NOT adjusted (marker is on surface, bone should stay inside)
-    console.log('[FIT] '+side+' hand → wrist marker (XY only)');
-    // FINGERS: scale X position only to reach fingertip marker
+    const curWP=getWP(hand);
+    const targetWP=new THREE.Vector3(wristMarker.x, wristMarker.y, curWP.z);
+    setWorldPos(hand, targetWP);
     clonedRoot.updateMatrixWorld(true);
+    console.log('[FIT] '+side+' hand → wrist marker');
+
+    // 5. FINGERS: scale to reach fingertip marker
     const handWP=getWP(hand);
     const fingertipMarker=markers['fingertips_'+(side==='Left'?'l':'r')];
     if(fingertipMarker){
-      const fingerReach=Math.abs(fingertipMarker.x-handWP.x);
+      // Use world distance for finger reach
+      const fingerReachW=new THREE.Vector3(fingertipMarker.x, fingertipMarker.y, handWP.z).distanceTo(handWP);
       const idx3=findBone('mixamorig'+side+'HandIndex3');
       if(idx3){
         const idx3WP=getWP(idx3);
-        const curFingerLen=Math.abs(idx3WP.x-handWP.x);
+        const curFingerLen=idx3WP.distanceTo(handWP);
         if(curFingerLen>0.005){
-          const fingerScale=fingerReach/curFingerLen;
-          hand.children.forEach(child=>{if(child.isBone)child.position.x*=fingerScale});
-          console.log('[FIT] '+side+' fingers X-scaled (Index): '+fingerScale.toFixed(3));
+          const fingerScale=fingerReachW/curFingerLen;
+          // Scale all direct children (finger chains) uniformly in local space
+          hand.children.forEach(child=>{if(child.isBone)child.position.multiplyScalar(fingerScale)});
+          console.log('[FIT] '+side+' fingers scaled: '+fingerScale.toFixed(3));
         }
       }
     }
