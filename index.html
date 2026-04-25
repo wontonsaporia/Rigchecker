@@ -7,7 +7,7 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Space+Mono:wght@400;700&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  :root{--bg:#f5f5f7;--bg2:#ffffff;--surface:#f0f0f3;--surface2:#e8e8ec;--text:#1d1d1f;--text2:#86868b;--accent:#0071e3;--accent2:#2997ff;--green:#4ecdc4;--blue:#45b7d1;--yellow:#f9ca24;--orange:#f0932b;--purple:#a29bfe;--sans:'Noto Sans JP',sans-serif;--mono:'Space Mono',monospace}
+  :root{--bg:#f0ede6;--bg2:#faf8f2;--surface:#f0ede8;--surface2:#e5e0d8;--text:#2c2c2e;--text2:#8e8a82;--accent:#4a7fb5;--accent2:#6199c9;--green:#4ecdc4;--blue:#45b7d1;--yellow:#f9ca24;--orange:#f0932b;--purple:#a29bfe;--sans:'Noto Sans JP',sans-serif;--mono:'Space Mono',monospace}
   html,body{width:100%;height:100%;overflow:hidden}
   body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
   .hdr{height:48px;background:var(--bg2);border-bottom:1px solid rgba(0,0,0,.08);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:100}
@@ -53,7 +53,7 @@
   .ab:hover{background:var(--surface2);border-color:rgba(0,0,0,.15)}
   .ab.on{background:rgba(0,113,227,.08);border-color:var(--accent);color:var(--accent)}
   .ab .an{display:block}.ab .as{display:block;font-size:10px;font-weight:400;color:var(--text2);margin-top:2px}
-  .btn-pause{width:100%;padding:10px;background:#34c759;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;font-family:var(--sans);cursor:pointer;margin-bottom:8px;display:none}
+  .btn-pause{width:100%;padding:10px;background:#6ab07a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;font-family:var(--sans);cursor:pointer;margin-bottom:8px;display:none}
   .ld{position:absolute;inset:0;background:rgba(245,245,247,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50}
   .ld.on{display:flex}
   .sp{width:48px;height:48px;border:3px solid #ddd;border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
@@ -87,7 +87,7 @@
 
     </div>
     <div class="sym"><input type="checkbox" id="sym" checked><label for="sym">Use Symmetry</label></div>
-    <div class="btw"><button class="btn-back" id="b-back1">BACK</button><button class="btn-main" id="b-rig" disabled>リグ生成</button></div>
+    <div class="btw"><button class="btn-back" id="b-undo" style="display:none">↩ やり直し</button><button class="btn-back" id="b-back1">BACK</button><button class="btn-main" id="b-rig" disabled>リグ生成</button></div>
   </div>
   <div class="sb" id="sb-an"><div class="sb-t">Animations</div><div class="sb-d">アニメーションを選んでプレビュー</div>
     <div class="ag" id="ag">
@@ -115,20 +115,20 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 const _op=FBXLoader.prototype.parse;FBXLoader.prototype.parse=function(buf,path){try{return _op.call(this,buf,path)}catch(e){if(e.message?.includes('MappingInformationType')){const b=new Uint8Array(buf instanceof ArrayBuffer?buf:buf.buffer||buf);const n=[76,97,121,101,114,69,108,101,109,101,110,116,67,111,108,111,114];for(let i=0;i<b.length-n.length;i++){let m=true;for(let j=0;j<n.length;j++){if(b[i+j]!==n[j]){m=false;break}}if(m)b[i+12]=88}return _op.call(this,b.buffer,path)}throw e}};
 // Scene
 const cv=document.getElementById('cv'),renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));renderer.setClearColor(0xf0f0f3);cv.appendChild(renderer.domElement);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));renderer.setClearColor(0xece8e0);cv.appendChild(renderer.domElement);
 const scene=new THREE.Scene();
 const perspCam=new THREE.PerspectiveCamera(50,1,0.01,100);perspCam.position.set(0,1.2,3);
 const orthoCam=new THREE.OrthographicCamera(-2,2,2,-2,0.01,100);orthoCam.position.set(0,1,5);
 let camera=perspCam;
 let controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=0.08;controls.target.set(0,0.8,0);controls.enabled=false;
 function switchCam(type){const tgt=controls.target.clone();controls.dispose();camera=type==='ortho'?orthoCam:perspCam;controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=0.08;controls.target.copy(tgt);controls.enabled=true;if(type==='ortho'){controls.enableRotate=false;controls.mouseButtons={LEFT:THREE.MOUSE.PAN,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};controls.touches={ONE:THREE.TOUCH.PAN,TWO:THREE.TOUCH.DOLLY_PAN}}onResize();controls.update()}
-scene.add(new THREE.AmbientLight(0x808090,1.2));
+scene.add(new THREE.AmbientLight(0x908880,1.3));
 const sunLight=new THREE.DirectionalLight(0xffffff,1.8);sunLight.position.set(3,5,4);sunLight.castShadow=true;sunLight.shadow.mapSize.set(1024,1024);sunLight.shadow.camera.near=0.1;sunLight.shadow.camera.far=20;sunLight.shadow.camera.left=-3;sunLight.shadow.camera.right=3;sunLight.shadow.camera.top=3;sunLight.shadow.camera.bottom=-3;sunLight.shadow.bias=-0.001;scene.add(sunLight);
 scene.add(new THREE.DirectionalLight(0x8899cc,0.4).translateX(-3).translateY(2).translateZ(-2));
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 // Ground plane for shadows
 const groundGeo=new THREE.PlaneGeometry(10,10);const groundMat=new THREE.ShadowMaterial({opacity:0.15});const ground=new THREE.Mesh(groundGeo,groundMat);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
-scene.add(new THREE.GridHelper(6,12,0xcccccc,0xdddddd));
+scene.add(new THREE.GridHelper(6,12,0xd5d0c8,0xe0dbd4));
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),clock=new THREE.Clock();
 function onResize(){const w=cv.clientWidth,h=cv.clientHeight;if(camera.isPerspectiveCamera){camera.aspect=w/h}else{const a=w/h,fh=camera.top-camera.bottom;camera.left=-fh*a/2;camera.right=fh*a/2}camera.updateProjectionMatrix();renderer.setSize(w,h)}
 window.addEventListener('resize',onResize);
@@ -178,12 +178,29 @@ function resetMarkers(){mkStep=0;markers={};mkSpheres.forEach(s=>scene.remove(s)
 function updateMarkerUI(){const cur=MK_ORDER[mkStep];document.querySelectorAll('.mk').forEach(el=>{const k=el.dataset.k,dot=el.querySelector('.mk-dot'),st=el.querySelector('.mk-st');el.classList.remove('cur','done');dot.classList.remove('filled');if(k===cur&&mkStep<MK_ORDER.length){el.classList.add('cur');st.textContent='— タップ'}const placed=k==='chin'||k==='groin'?markers[k]:markers[k+'_l'];if(placed){el.classList.add('done');dot.classList.add('filled');st.textContent='✓'}})}
 function addMkSphere(pos,col){const s=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshBasicMaterial({color:col,depthTest:false}));s.position.copy(pos);s.renderOrder=999;scene.add(s);mkSpheres.push(s)}
 function onTap(e){if(step!=='markers'||mkStep>=MK_ORDER.length||!userMeshes.length)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-rect.left)/rect.width)*2-1;pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(userMeshes,true);if(!hits.length)return;const pt=hits[0].point,key=MK_ORDER[mkStep],col=MK_COLORS[key];if(key==='chin'||key==='groin'){const snap=pt.clone();snap.x=0;markers[key]=snap;addMkSphere(snap,col)}else{markers[key+'_l']=pt.clone();addMkSphere(pt,col);if(useSym){const m=pt.clone();m.x=-m.x;markers[key+'_r']=m;addMkSphere(m,col)}}mkStep++;updateMarkerUI();
+// Show/hide undo button
+$('b-undo').style.display=mkStep>0?'block':'none';
 if(mkStep<MK_ORDER.length){
   showGuide(MK_GUIDES[MK_ORDER[mkStep]]);
 
 }else{showGuide('「リグ生成」をタップ');$('b-rig').disabled=!refData}}
 let tapSt=null;renderer.domElement.addEventListener('pointerdown',e=>{tapSt={x:e.clientX,y:e.clientY,t:Date.now()}});renderer.domElement.addEventListener('pointerup',e=>{if(!tapSt)return;if(Math.hypot(e.clientX-tapSt.x,e.clientY-tapSt.y)<8&&Date.now()-tapSt.t<300)onTap(e);tapSt=null});
 $('sym').addEventListener('change',e=>{useSym=e.target.checked});
+$('b-undo').addEventListener('click',()=>{
+  if(mkStep<=0)return;
+  mkStep--;
+  const key=MK_ORDER[mkStep];
+  // Remove marker data
+  if(key==='chin'||key==='groin'){markers[key]=null}
+  else{markers[key+'_l']=null;markers[key+'_r']=null}
+  // Remove spheres (1 for single, 2 for symmetric)
+  const removeCount=(key==='chin'||key==='groin')?1:(useSym?2:1);
+  for(let i=0;i<removeCount;i++){if(mkSpheres.length>0){const s=mkSpheres.pop();scene.remove(s)}}
+  updateMarkerUI();
+  showGuide(MK_GUIDES[MK_ORDER[mkStep]]);
+  $('b-rig').disabled=true;
+  $('b-undo').style.display=mkStep>0?'block':'none';
+});
 // Rig Generation (B-plan)
 $('b-rig').addEventListener('click',()=>{if(!refData||!userModel)return;showLoad('リグを生成中...');setTimeout(()=>{try{const modelBox=new THREE.Box3().setFromObject(userModel),modelH=modelBox.getSize(new THREE.Vector3()).y;
 // ── MARKER-BASED FITTING ──
@@ -350,7 +367,7 @@ skeleton.bones.forEach(b=>{if(LABEL_BONES.includes(b.name)){const lbl=makeLabel(
 console.log('[LABELS] Added '+boneLabels.length+' bone labels');
 mixer=new THREE.AnimationMixer(skinnedMesh);setSt('bones',clonedBones.length);
 // Default: hide rig
-rigVisible=false;if(skelHelper)skelHelper.visible=false;boneLabels.forEach(l=>l.sprite.visible=false);$('b-rig-toggle').textContent='🦴 リグ表示';$('b-rig-toggle').style.background='#007aff';$('b-rig-toggle').style.display='block';
+rigVisible=false;if(skelHelper)skelHelper.visible=false;boneLabels.forEach(l=>l.sprite.visible=false);$('b-rig-toggle').textContent='🦴 リグ表示';$('b-rig-toggle').style.background='#7a9ab5';$('b-rig-toggle').style.display='block';
 hideLoad();goStep('animate');
 // Auto-play Idle
 const idleName='Breathing Idle';showLoad(idleName+' を読み込み中...');loadAnim(idleName).then(()=>{hideLoad();playAnim(idleName)}).catch(()=>{hideLoad();console.warn('Idle auto-play failed')})}catch(err){hideLoad();alert('リグ生成に失敗:\n'+err.message);console.error(err)}},100)});
@@ -359,7 +376,7 @@ function loadAnim(name){return new Promise((resolve,reject)=>{const url='animati
 function playAnim(name){if(!mixer)return;
 // T-Pose: stop all animations, return to bind pose
 if(name==='T-Pose'){if(currentAction)currentAction.fadeOut(0.3);currentAction=null;mixer.stopAllAction();document.querySelectorAll('.ab').forEach(b=>b.classList.toggle('on',b.dataset.a==='T-Pose'));$('b-pause').style.display='none';return}
-if(!animClips[name])return;if(currentAction)currentAction.fadeOut(0.3);const a=mixer.clipAction(animClips[name]);a.reset().fadeIn(0.3).play();currentAction=a;animPaused=false;document.querySelectorAll('.ab').forEach(b=>b.classList.toggle('on',b.dataset.a===name));$('b-pause').style.display='block';$('b-pause').textContent='⏸ 一時停止';$('b-pause').style.background='#34c759';$('b-rig-toggle').style.display='block'}
+if(!animClips[name])return;if(currentAction)currentAction.fadeOut(0.3);const a=mixer.clipAction(animClips[name]);a.reset().fadeIn(0.3).play();currentAction=a;animPaused=false;document.querySelectorAll('.ab').forEach(b=>b.classList.toggle('on',b.dataset.a===name));$('b-pause').style.display='block';$('b-pause').textContent='⏸ 一時停止';$('b-pause').style.background='#6ab07a';$('b-rig-toggle').style.display='block'}
 document.querySelectorAll('.ab').forEach(btn=>{btn.addEventListener('click',()=>{const name=btn.dataset.a;if(name==='T-Pose'){playAnim('T-Pose');return}if(animClips[name]){playAnim(name);return}showLoad(name+' を読み込み中...');loadAnim(name).then(()=>{hideLoad();playAnim(name)}).catch(err=>{hideLoad();alert('"'+name+'" の読み込みに失敗しました。');console.error(err)})})});
 $('b-pause').addEventListener('click',()=>{if(!currentAction)return;animPaused=!animPaused;currentAction.paused=animPaused;$('b-pause').textContent=animPaused?'▶ 再生':'⏸ 一時停止';$('b-pause').style.background=animPaused?'#5a2a2a':'#2a5a2a'});
 let rigVisible=true;
