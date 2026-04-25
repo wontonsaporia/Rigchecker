@@ -250,6 +250,14 @@ const getWP=b=>{const v=new THREE.Vector3();b.getWorldPosition(v);return v};
       foot.position.y-=HEEL_DOWN;
       foot.position.z-=HEEL_BACK;
     }
+    // ToeBase: place at ground level (y=0), keep X and Z from reference
+    clonedRoot.updateMatrixWorld(true);
+    if(toeBase){
+      const toeWP=getWP(toeBase);
+      const toeTarget=new THREE.Vector3(toeWP.x, 0, toeWP.z);
+      setWorldPos(toeBase, toeTarget);
+      console.log('[FIT] '+side+' toeBase → ground (y=0)');
+    }
   }
 });
 // Z offset: shift entire rig slightly backward
