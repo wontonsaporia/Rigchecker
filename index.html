@@ -66,7 +66,7 @@
 </style>
 </head>
 <body>
-<div class="hdr"><div class="logo">RIGCHECKER <span>v1.1</span></div><div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div></div>
+<div class="hdr"><div class="logo">RIGCHECKER <span>v1.2</span></div><div class="dots"><div class="dot on" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div></div></div>
 <div class="main">
   <div id="cv"></div>
   <div class="guide" id="guide"></div>
@@ -130,7 +130,7 @@ let refData=null,userModel=null,userMeshes=[],skinnedMesh=null,skelHelper=null,m
 const animClips={};
 const MK_ORDER=['chin','wrists','fingertips','elbows','shoulders','knees','waist','groin'];
 const MK_COLORS={chin:0x45b7d1,wrists:0xf9ca24,fingertips:0xf9a825,elbows:0xf0932b,shoulders:0x45d1a0,knees:0xa29bfe,waist:0xff9ff3,groin:0xe94560};
-const MK_GUIDES={chin:'あご をタップ',wrists:'手首 をタップ（片側）',fingertips:'指先 をタップ（片側）',elbows:'ひじ をタップ（片側）',shoulders:'肩 をタップ（片側）',knees:'ひざ をタップ（片側）',waist:'腰 をタップ（脚の付け根）',groin:'股間 をタップ'};
+const MK_GUIDES={chin:'あご をタップ',wrists:'手首 をタップ（片側）',fingertips:'人差し指の先 をタップ（片側）',elbows:'ひじ をタップ（片側）',shoulders:'肩 をタップ（片側）',knees:'ひざ をタップ（片側）',waist:'脚の付け根 をタップ（片側）',groin:'鼠径部 をタップ'};
 let mkStep=0,markers={},mkSpheres=[],useSym=true;
 // UI
 const $=id=>document.getElementById(id);
@@ -167,9 +167,9 @@ const idx=c.geometry.index;pc+=idx?idx.count/3:c.geometry.attributes.position.co
 if(ext==='glb'||ext==='gltf'){import('three/addons/loaders/GLTFLoader.js').then(({GLTFLoader})=>{new GLTFLoader().parse(e.target.result,'',g=>onParsed(g.scene),err=>{hideLoad();alert('GLB error: '+err.message)})})}else{onParsed(new FBXLoader().parse(e.target.result))}}catch(err){hideLoad();alert('読み込みに失敗:\n'+err.message);console.error(err)}};reader.readAsArrayBuffer(file)}
 // Markers
 function resetMarkers(){mkStep=0;markers={};mkSpheres.forEach(s=>scene.remove(s));mkSpheres=[];updateMarkerUI();$('b-rig').disabled=true}
-function updateMarkerUI(){const cur=MK_ORDER[mkStep];document.querySelectorAll('.mk').forEach(el=>{const k=el.dataset.k,dot=el.querySelector('.mk-dot'),st=el.querySelector('.mk-st');el.classList.remove('cur','done');dot.classList.remove('filled');if(k===cur&&mkStep<MK_ORDER.length){el.classList.add('cur');st.textContent='— タップ'}const placed=k==='chin'||k==='groin'||k==='waist'?markers[k]:markers[k+'_l'];if(placed){el.classList.add('done');dot.classList.add('filled');st.textContent='✓'}})}
+function updateMarkerUI(){const cur=MK_ORDER[mkStep];document.querySelectorAll('.mk').forEach(el=>{const k=el.dataset.k,dot=el.querySelector('.mk-dot'),st=el.querySelector('.mk-st');el.classList.remove('cur','done');dot.classList.remove('filled');if(k===cur&&mkStep<MK_ORDER.length){el.classList.add('cur');st.textContent='— タップ'}const placed=k==='chin'||k==='groin'?markers[k]:markers[k+'_l'];if(placed){el.classList.add('done');dot.classList.add('filled');st.textContent='✓'}})}
 function addMkSphere(pos,col){const s=new THREE.Mesh(new THREE.SphereGeometry(0.03,12,12),new THREE.MeshBasicMaterial({color:col,depthTest:false}));s.position.copy(pos);s.renderOrder=999;scene.add(s);mkSpheres.push(s)}
-function onTap(e){if(step!=='markers'||mkStep>=MK_ORDER.length||!userMeshes.length)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-rect.left)/rect.width)*2-1;pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(userMeshes,true);if(!hits.length)return;const pt=hits[0].point,key=MK_ORDER[mkStep],col=MK_COLORS[key];if(key==='chin'||key==='groin'||key==='waist'){const snap=pt.clone();snap.x=0;markers[key]=snap;addMkSphere(snap,col)}else{markers[key+'_l']=pt.clone();addMkSphere(pt,col);if(useSym){const m=pt.clone();m.x=-m.x;markers[key+'_r']=m;addMkSphere(m,col)}}mkStep++;updateMarkerUI();if(mkStep<MK_ORDER.length)showGuide(MK_GUIDES[MK_ORDER[mkStep]]);else{showGuide('「リグ生成」をタップ');$('b-rig').disabled=!refData}}
+function onTap(e){if(step!=='markers'||mkStep>=MK_ORDER.length||!userMeshes.length)return;const rect=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-rect.left)/rect.width)*2-1;pointer.y=-((e.clientY-rect.top)/rect.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(userMeshes,true);if(!hits.length)return;const pt=hits[0].point,key=MK_ORDER[mkStep],col=MK_COLORS[key];if(key==='chin'||key==='groin'){const snap=pt.clone();snap.x=0;markers[key]=snap;addMkSphere(snap,col)}else{markers[key+'_l']=pt.clone();addMkSphere(pt,col);if(useSym){const m=pt.clone();m.x=-m.x;markers[key+'_r']=m;addMkSphere(m,col)}}mkStep++;updateMarkerUI();if(mkStep<MK_ORDER.length)showGuide(MK_GUIDES[MK_ORDER[mkStep]]);else{showGuide('「リグ生成」をタップ');$('b-rig').disabled=!refData}}
 let tapSt=null;renderer.domElement.addEventListener('pointerdown',e=>{tapSt={x:e.clientX,y:e.clientY,t:Date.now()}});renderer.domElement.addEventListener('pointerup',e=>{if(!tapSt)return;if(Math.hypot(e.clientX-tapSt.x,e.clientY-tapSt.y)<8&&Date.now()-tapSt.t<300)onTap(e);tapSt=null});
 $('sym').addEventListener('change',e=>{useSym=e.target.checked});
 // Rig Generation (B-plan)
@@ -281,14 +281,14 @@ console.log('[FIT] Z offset applied: '+RIG_Z_OFFSET);
     const fingertipMarker=markers['fingertips_'+(side==='Left'?'l':'r')];
     if(fingertipMarker){
       const fingerReach=Math.abs(fingertipMarker.x-handWP.x);
-      const mid3=findBone('mixamorig'+side+'HandMiddle3');
-      if(mid3){
-        const mid3WP=getWP(mid3);
-        const curFingerLen=Math.abs(mid3WP.x-handWP.x);
+      const idx3=findBone('mixamorig'+side+'HandIndex3');
+      if(idx3){
+        const idx3WP=getWP(idx3);
+        const curFingerLen=Math.abs(idx3WP.x-handWP.x);
         if(curFingerLen>0.005){
           const fingerScale=fingerReach/curFingerLen;
           hand.children.forEach(child=>{if(child.isBone)child.position.multiplyScalar(fingerScale)});
-          console.log('[FIT] '+side+' fingers scaled: '+fingerScale.toFixed(3));
+          console.log('[FIT] '+side+' fingers scaled (Index): '+fingerScale.toFixed(3));
         }
       }
     }
@@ -310,7 +310,7 @@ const allBWP={};clonedBones.forEach((b,i)=>{allBWP[b.name]=bwp[i]});const skinBo
 const _ab=new THREE.Vector3(),_ap=new THREE.Vector3(),_cl=new THREE.Vector3();function dTS(pt,s,e){_ab.copy(e).sub(s);_ap.copy(pt).sub(s);const l2=_ab.dot(_ab);if(l2<0.00001)return pt.distanceTo(s);const t=Math.max(0,Math.min(1,_ap.dot(_ab)/l2));_cl.copy(s).addScaledVector(_ab,t);return pt.distanceTo(_cl)}
 const vCount=posArr.length/3,si=new Uint16Array(vCount*4),sw=new Float32Array(vCount*4),tv=new THREE.Vector3();
 const shoulderCutoffX=markers.shoulders_l?Math.abs(markers.shoulders_l.x):0.15;
-const groinCutoffY=markers.waist?markers.waist.y:markers.groin?markers.groin.y:0.45;
+const groinCutoffY=markers.waist_l?markers.waist_l.y:markers.groin?markers.groin.y:0.45;
 console.log('[SKIN] Arm cutoff X: '+shoulderCutoffX.toFixed(3)+', Groin cutoff Y: '+groinCutoffY.toFixed(3));
 for(let i=0;i<vCount;i++){tv.set(posArr[i*3],posArr[i*3+1],posArr[i*3+2]);const ds=skinBones.map(sb=>{let d=dTS(tv,sb.start,sb.end);const ax=Math.abs(tv.x);const isArm=sb.name.includes('Shoulder')||sb.name.includes('Arm')||sb.name.includes('ForeArm')||sb.name.includes('Hand')||sb.name.includes('Thumb')||sb.name.includes('Index')||sb.name.includes('Middle')||sb.name.includes('Ring')||sb.name.includes('Pinky');const isSpine=sb.name.includes('Spine')||sb.name.includes('Hips')||sb.name.includes('Neck')||sb.name.includes('Head');const isLeg=sb.name.includes('UpLeg')||sb.name.includes('Leg')||sb.name.includes('Foot')||sb.name.includes('Toe');
 // Arm hard boundary
